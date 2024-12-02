@@ -2,59 +2,36 @@ import pandas as pd
 import numpy as np
 from openpyxl import load_workbook
 from openpyxl.drawing.spreadsheet_drawing import AbsoluteAnchor
-from openpyxl.drawing.xdr import XDRPoint2D, XDRPositiveSize2D
-
-def _get_coordinates(item):
-    coords = {'x': 0, 'y': 0, 'width': 0, 'height': 0}
-    
-    try:
-        if hasattr(item, 'anchor'):
-            if isinstance(item.anchor, AbsoluteAnchor):
-                coords.update({
-                    'x': item.anchor.pos.x.val,
-                    'y': item.anchor.pos.y.val
-                })
-    except Exception as e:
-        print(f"Debug: Error getting coordinates: {str(e)}")
-    
-    return coords
-
-def _process_drawing_item(item):
-    try:
-        # Extract common properties
-        shape_info = {
-            'type': type(item).__name__,
-            'name': getattr(item, 'name', ''),
-            'coordinates': _get_coordinates(item)
-        }
-        
-        # Add specific properties based on shape type
-        if hasattr(item, 'description'):
-            shape_info['description'] = item.description
-            
-        return shape_info
-    except Exception as e:
-        print(f"Debug: Error processing drawing item: {str(e)}")
-        return None
 
 def extract_shape_info(workbook, sheet_name):
     sheet = workbook[sheet_name]
     shapes = []
     
     try:
-        # Get shapes from all drawing types
-        for drawing_type in ['_charts', '_images', '_drawing']:
-            if hasattr(sheet, drawing_type):
-                drawing_obj = getattr(sheet, drawing_type)
-                if isinstance(drawing_obj, list):
-                    for item in drawing_obj:
-                        shape_info = _process_drawing_item(item)
-                        if shape_info:
-                            shapes.append(shape_info)
-                            print(f"Debug: Found shape: {shape_info['type']} - {shape_info['name']}")
-    
+        # Access drawings directly using the drawings property
+        for drawing in sheet._drawings:
+            shape_info = {
+                'type': type(drawing).__name__,
+                'name': drawing.name if hasattr(drawing, 'name') else '',
+                'coordinates': {
+                    'x': drawing.left if hasattr(drawing, 'left') else 0,
+                    'y': drawing.top if hasattr(drawing, 'top') else 0,
+                    'width': drawing.width if hasattr(drawing, 'width') else 0,
+                    'height': drawing.height if hasattr(drawing, 'height') else 0
+                }
+            }
+            
+            # Additional properties for specific shape types
+            if hasattr(drawing, 'text'):
+                shape_info['text'] = drawing.text
+            if hasattr(drawing, 'description'):
+                shape_info['description'] = drawing.description
+            
+            shapes.append(shape_info)
+            print(f"Debug: Found shape: {shape_info}")
     except Exception as e:
         print(f"Debug: Error in shape extraction: {str(e)}")
+        print(f"Debug: Sheet properties: {dir(sheet)}")
     
     return shapes
 
@@ -66,9 +43,12 @@ def compare_shapes(shapes1, shapes2):
     shapes1_dict = {shape['name']: shape for shape in shapes1}
     shapes2_dict = {shape['name']: shape for shape in shapes2}
     
+    print(f"Debug: Comparing shapes - File 1: {len(shapes1)} shapes, File 2: {len(shapes2)} shapes")
+    
     # Find added and modified shapes
     for name, shape2 in shapes2_dict.items():
         if name not in shapes1_dict:
+            print(f"Debug: Found added shape: {name}")
             shape_differences.append({
                 'type': 'added',
                 'shape_name': name,
@@ -78,21 +58,26 @@ def compare_shapes(shapes1, shapes2):
             shape1 = shapes1_dict[name]
             differences = {}
             
-            # Compare coordinates
+            # Compare coordinates with tolerance
             for coord in ['x', 'y', 'width', 'height']:
-                if shape1['coordinates'][coord] != shape2['coordinates'][coord]:
+                val1 = shape1['coordinates'][coord]
+                val2 = shape2['coordinates'][coord]
+                if abs(val1 - val2) > 0.1:  # Using small tolerance for floating point comparison
                     differences[coord] = {
-                        'old': shape1['coordinates'][coord],
-                        'new': shape2['coordinates'][coord]
+                        'old': val1,
+                        'new': val2
                     }
+                    print(f"Debug: Shape {name} - {coord} changed from {val1} to {val2}")
             
             # Compare other attributes
-            for attr in ['type', 'description']:
-                if shape1[attr] != shape2[attr]:
-                    differences[attr] = {
-                        'old': shape1[attr],
-                        'new': shape2[attr]
-                    }
+            for attr in ['type', 'text', 'description']:
+                if attr in shape1 and attr in shape2:
+                    if shape1[attr] != shape2[attr]:
+                        differences[attr] = {
+                            'old': shape1[attr],
+                            'new': shape2[attr]
+                        }
+                        print(f"Debug: Shape {name} - {attr} changed from {shape1[attr]} to {shape2[attr]}")
             
             if differences:
                 shape_differences.append({
@@ -104,6 +89,7 @@ def compare_shapes(shapes1, shapes2):
     # Find deleted shapes
     for name in shapes1_dict:
         if name not in shapes2_dict:
+            print(f"Debug: Found deleted shape: {name}")
             shape_differences.append({
                 'type': 'deleted',
                 'shape_name': name,
