@@ -162,17 +162,19 @@ def display_shape_differences(shape_differences):
                 except Exception as e:
                     st.error(f"変更後の情報表示中にエラー: {str(e)}")
 
-def export_comparison(comparison_result):
+def export_comparison(comparison_result, sheet1_name=None, sheet2_name=None):
     """
-    Export comparison results including shape differences
+    Export comparison results including shape differences and sheet names
     """
     output = io.BytesIO()
     
     # Create Excel writer object
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # Write data differences
-        comparison_result['df1'].to_excel(writer, sheet_name='File1', index=False)
-        comparison_result['df2'].to_excel(writer, sheet_name='File2', index=False)
+        # Write data differences with sheet names
+        sheet1_label = f'File1_{sheet1_name}' if sheet1_name else 'File1'
+        sheet2_label = f'File2_{sheet2_name}' if sheet2_name else 'File2'
+        comparison_result['df1'].to_excel(writer, sheet_name=sheet1_label, index=False)
+        comparison_result['df2'].to_excel(writer, sheet_name=sheet2_label, index=False)
         # Create a more detailed summary DataFrame with Excel-style cell references
         summary_data = []
         for diff in comparison_result['diff_summary'].to_dict('records'):

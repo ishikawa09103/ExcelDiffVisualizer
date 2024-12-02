@@ -31,27 +31,34 @@ def main():
 
     if file1 and file2:
         try:
-            # Load and process files
-            df1 = pd.read_excel(file1)
-            df2 = pd.read_excel(file2)
-            
-            # Reset file pointers for shape comparison
-            file1.seek(0)
-            file2.seek(0)
-            
-            # Load workbooks for shape comparison
+            # Load workbooks
             wb1 = load_workbook(file1)
             wb2 = load_workbook(file2)
             
-            # Get active sheet names
-            sheet1_name = wb1.active.title
-            sheet2_name = wb2.active.title
+            # Get sheet names
+            sheets1 = wb1.sheetnames
+            sheets2 = wb2.sheetnames
             
-            # Extract and compare shapes
+            # Sheet selection
+            col1, col2 = st.columns(2)
+            with col1:
+                sheet1 = st.selectbox("ファイル1のシートを選択", sheets1)
+            with col2:
+                sheet2 = st.selectbox("ファイル2のシートを選択", sheets2)
+            
+            # Reset file pointers for reading Excel
+            file1.seek(0)
+            file2.seek(0)
+            
+            # Read selected sheets
+            df1 = pd.read_excel(file1, sheet_name=sheet1)
+            df2 = pd.read_excel(file2, sheet_name=sheet2)
+            
+            # Extract and compare shapes for selected sheets
             st.write("画像の比較を開始...")
-            shapes1 = comparison.extract_shape_info(wb1, sheet1_name)
+            shapes1 = comparison.extract_shape_info(wb1, sheet1)
             st.write(f"ファイル1の画像数: {len(shapes1)}")
-            shapes2 = comparison.extract_shape_info(wb2, sheet2_name)
+            shapes2 = comparison.extract_shape_info(wb2, sheet2)
             st.write(f"ファイル2の画像数: {len(shapes2)}")
             shape_differences = comparison.compare_shapes(shapes1, shapes2)
             
@@ -202,7 +209,7 @@ def main():
             # Export options
             st.markdown("---")
             st.subheader("エクスポート")
-            utils.export_comparison(comparison_result)
+            utils.export_comparison(comparison_result, sheet1, sheet2)
             
         except Exception as e:
             st.error(f"ファイルの処理中にエラーが発生しました: {str(e)}")
