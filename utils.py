@@ -99,7 +99,7 @@ def export_comparison(comparison_result):
                 values = diff['values']
                 for col, val in values.items():
                     summary_data.append({
-                        '変更タイプ': '追加' if diff['type'] == 'added' else '削除',
+                        '変更タイプ': '行追加' if diff['type'] == 'added' else '削除',
                         '列': col,
                         '行': diff['row_index'],
                         '値': val,
