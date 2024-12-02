@@ -148,38 +148,51 @@ def compare_dataframes(df1, df2):
         key_columns = common_cols[:min(3, len(common_cols))]
     
     def create_row_hash(row):
-        """Create a hash value for row matching based on key columns"""
+        """Create a hash value for row matching based on key columns with improved type handling"""
         values = []
+        
+        def normalize_numeric(val):
+            """数値を正規化して文字列に変換"""
+            if pd.isna(val) or val is None:
+                return ''
+            try:
+                if isinstance(val, (int, np.integer)):
+                    return str(int(val))
+                elif isinstance(val, float):
+                    # 整数の場合は整数として扱う
+                    if val.is_integer():
+                        return str(int(val))
+                    # 小数の場合は固定精度で表現
+                    return f"{val:.6f}".rstrip('0').rstrip('.')
+                else:
+                    return str(val)
+            except (AttributeError, ValueError, TypeError):
+                return str(val)
+
+        def normalize_string(val):
+            """文字列を正規化"""
+            if pd.isna(val) or val is None:
+                return ''
+            return str(val).strip().lower()  # 大文字小文字を区別しない
+
         for col in key_columns:
             try:
                 val = row[col]
-                # Handle different data types appropriately
-                if pd.isna(val) or val is None:
-                    values.append('')
-                    continue
-
-                # Handle numeric types
                 if pd.api.types.is_numeric_dtype(type(val)):
-                    try:
-                        if isinstance(val, (int, np.integer)):
-                            values.append(str(int(val)))
-                        elif isinstance(val, float):
-                            if val.is_integer():
-                                values.append(str(int(val)))
-                            else:
-                                values.append(f"{val:.6f}".rstrip('0').rstrip('.'))
-                        else:
-                            values.append(str(val))
-                    except (AttributeError, ValueError, TypeError) as e:
-                        values.append(str(val))
-                # Handle string and other types
+                    values.append(normalize_numeric(val))
                 else:
-                    clean_val = str(val).strip() if val is not None else ''
-                    values.append(clean_val)
-            except Exception as e:
+                    values.append(normalize_string(val))
+            except Exception:
                 values.append('')
-                continue
-        return '||'.join(values)
+        
+        # キー列の重み付けを反映したハッシュ値を生成
+        weighted_values = []
+        for i, val in enumerate(values):
+            # キー列の順序に基づいて重み付け
+            weight = len(key_columns) - i
+            weighted_values.append(f"{weight}:{val}")
+        
+        return '||'.join(weighted_values)
     
     # Create hash values for both dataframes with error handling
     try:
@@ -231,24 +244,74 @@ def compare_dataframes(df1, df2):
     
     # Second pass: Handle remaining rows using similarity matching
     def calculate_row_similarity(row1, row2):
-        """Calculate similarity between two rows"""
+        """Calculate similarity between two rows with improved matching logic"""
         matches = 0
         total_weight = 0
         
+        def calculate_string_similarity(s1, s2):
+            """文字列の類似度を計算（レーベンシュタイン距離ベース）"""
+            if not s1 and not s2:  # 両方空の場合
+                return 1.0
+            if not s1 or not s2:  # どちらかが空の場合
+                return 0.0
+                
+            # 文字列を正規化
+            s1 = str(s1).strip().lower()
+            s2 = str(s2).strip().lower()
+            
+            if s1 == s2:
+                return 1.0
+                
+            # 簡易的なレーベンシュタイン距離の計算
+            len_s1, len_s2 = len(s1), len(s2)
+            if len_s1 < len_s2:
+                s1, s2 = s2, s1
+                len_s1, len_s2 = len_s2, len_s1
+            
+            # 文字の一致度を計算
+            matches = sum(1 for i in range(min(len_s1, len_s2)) if s1[i] == s2[i])
+            return matches / max(len_s1, len_s2)
+        
+        def calculate_numeric_similarity(v1, v2):
+            """数値の類似度を計算"""
+            try:
+                if pd.isna(v1) and pd.isna(v2):
+                    return 1.0
+                if pd.isna(v1) or pd.isna(v2):
+                    return 0.0
+                
+                n1 = float(v1)
+                n2 = float(v2)
+                
+                if n1 == n2:
+                    return 1.0
+                    
+                # 数値の差に基づく類似度
+                max_val = max(abs(n1), abs(n2))
+                if max_val == 0:
+                    return 1.0
+                    
+                diff_ratio = abs(n1 - n2) / max_val
+                return max(0, 1 - diff_ratio)
+            except (ValueError, TypeError):
+                return 0.0
+        
         for col in common_cols:
-            # Give more weight to key columns
-            weight = 2.0 if col in key_columns else 1.0
+            # キー列により高い重みを設定
+            weight = 3.0 if col in key_columns[:2] else 2.0 if col in key_columns else 1.0
             total_weight += weight
             
-            val1 = str(row1[col]).strip() if pd.notna(row1[col]) else ''
-            val2 = str(row2[col]).strip() if pd.notna(row2[col]) else ''
+            val1 = row1[col]
+            val2 = row2[col]
             
-            if val1 == val2:
-                matches += weight
-            elif val1 and val2:  # Both values exist but are different
-                # Calculate string similarity for text values
-                similarity = sum(a == b for a, b in zip(val1, val2)) / max(len(val1), len(val2))
-                matches += weight * similarity if similarity > 0.8 else 0
+            # 数値型の場合
+            if pd.api.types.is_numeric_dtype(type(val1)) or pd.api.types.is_numeric_dtype(type(val2)):
+                similarity = calculate_numeric_similarity(val1, val2)
+            else:
+                # 文字列型の場合
+                similarity = calculate_string_similarity(val1, val2)
+            
+            matches += weight * similarity
         
         return matches / total_weight if total_weight > 0 else 0
     
