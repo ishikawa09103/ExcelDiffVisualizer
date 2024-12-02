@@ -7,78 +7,56 @@ from openpyxl.drawing.image import Image
 from openpyxl.drawing.xdr import XDRPoint2D, XDRPositiveSize2D
 
 def extract_shape_info(wb, sheet_name):
-    """
-    Extract shape information from an Excel worksheet using the latest openpyxl API
-    """
     shapes_info = []
     ws = wb[sheet_name]
     
-    # デバッグ出力を追加
     st.write("シートの描画情報を確認中...")
     st.write(f"ワークシート: {sheet_name}")
     
     try:
-        # Get drawings from the worksheet
-        drawings = ws._drawing if hasattr(ws, '_drawing') else []
-        if not drawings and hasattr(ws, 'drawings'):
-            drawings = ws.drawings
+        # 画像取得方法の追加
+        image_files = []
         
-        # デバッグ出力を追加
-        st.write(f"検出された描画オブジェクト数: {len(drawings) if drawings else 0}")
+        # Method 1: Using _images
+        if hasattr(ws, '_images'):
+            image_files.extend(ws._images)
+            
+        # Method 2: Using drawings
+        drawings = []
+        if hasattr(ws, '_drawing'):
+            drawings.extend(ws._drawing.drawings if ws._drawing else [])
+        if hasattr(ws, 'drawings'):
+            drawings.extend(ws.drawings)
+            
+        # Method 3: Using anchors
+        for drawing in drawings:
+            if isinstance(drawing, SpreadsheetDrawing):
+                for rel in drawing._rels.values():
+                    if isinstance(rel.target, Image):
+                        image_files.append(rel.target)
         
-        # Process each drawing
-        for drawing in drawings if drawings else []:
-            # デバッグ出力を追加
-            st.write(f"描画オブジェクトの種類: {type(drawing).__name__}")
-            
-            shape_info = {
-                'type': 'unknown',
-                'x': 0,
-                'y': 0,
-                'width': None,
-                'height': None,
-                'text': '',
-                'description': ''
-            }
-            
+        st.write(f"検出された画像ファイル数: {len(image_files)}")
+        
+        # Process each image
+        for img in image_files:
             try:
-                # Get anchor information
-                if hasattr(drawing, 'anchor'):
-                    anchor = drawing.anchor
-                    shape_info.update({
+                anchor = getattr(img, 'anchor', None)
+                if anchor:
+                    shape_info = {
+                        'type': 'image',
                         'x': getattr(anchor, 'col', 0),
                         'y': getattr(anchor, 'row', 0),
                         'width': getattr(anchor, 'width', None),
-                        'height': getattr(anchor, 'height', None)
-                    })
-                
-                # Determine shape type and extract specific information
-                if hasattr(drawing, '_shape_type'):
-                    shape_info['type'] = drawing._shape_type
-                elif isinstance(drawing, Image):
-                    shape_info['type'] = 'image'
-                else:
-                    shape_info['type'] = type(drawing).__name__
-                
-                # Extract text if available
-                if hasattr(drawing, 'text'):
-                    shape_info['text'] = drawing.text
-                elif hasattr(drawing, 'title'):
-                    shape_info['text'] = drawing.title
-                
-                # Get additional description if available
-                if hasattr(drawing, 'description'):
-                    shape_info['description'] = drawing.description
-                
-                shapes_info.append(shape_info)
-                
-            except Exception as shape_error:
-                st.warning(f"図形の処理中にエラーが発生しました: {str(shape_error)}")
-                continue
+                        'height': getattr(anchor, 'height', None),
+                        'description': getattr(img, 'description', '')
+                    }
+                    shapes_info.append(shape_info)
+                    st.write(f"画像情報を追加: {shape_info}")
+            except Exception as img_error:
+                st.warning(f"画像の処理中にエラー: {str(img_error)}")
                 
     except Exception as ws_error:
-        st.warning(f"ワークシートの描画情報へのアクセス中にエラーが発生しました: {str(ws_error)}")
-        return []
+        st.warning(f"ワークシートの処理中にエラー: {str(ws_error)}")
     
     return shapes_info
 
