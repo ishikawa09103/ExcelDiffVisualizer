@@ -74,25 +74,49 @@ def extract_shape_info(wb, sheet_name):
 
         # Method 3: 図形（シェイプ）の検出
         st.write("図形（シェイプ）オブジェクトの検索...")
+        shapes = []
+
+        # _drawing.shapesから図形を検出
+        if hasattr(ws, '_drawing') and hasattr(ws._drawing, 'shapes'):
+            shapes.extend(ws._drawing.shapes)
+        # 直接のshapesプロパティから図形を検出
         if hasattr(ws, 'shapes'):
-            for shape in ws.shapes:
-                try:
-                    shape_type = getattr(shape, 'type', 'unknown')
-                    st.write(f"検出された図形の種類: {shape_type}")
-                    st.write(f"図形の位置: {shape.anchor}")
-                    
-                    shapes_info.append({
-                        'type': 'shape',
-                        'shape_type': shape_type,
-                        'x': shape.anchor.col,
-                        'y': shape.anchor.row,
-                        'width': shape.width,
-                        'height': shape.height,
-                        'text': getattr(shape, 'text', '')
-                    })
-                except Exception as e:
-                    st.warning(f"図形の処理中にエラー: {str(e)}")
-                    continue
+            shapes.extend(ws.shapes)
+
+        for shape in shapes:
+            try:
+                st.write(f"図形オブジェクトを検出: {shape}")
+                shape_type = getattr(shape, 'type', None) or getattr(shape, '_type', 'unknown')
+                st.write(f"検出された図形の種類: {shape_type}")
+                
+                # 図形の位置情報を取得
+                anchor = getattr(shape, 'anchor', None)
+                if anchor:
+                    st.write(f"図形の位置: セル {getattr(anchor, 'col', 0)}, {getattr(anchor, 'row', 0)}")
+                    x = getattr(anchor, 'col', 0)
+                    y = getattr(anchor, 'row', 0)
+                else:
+                    x = getattr(shape, 'col', 0)
+                    y = getattr(shape, 'row', 0)
+                    st.write(f"図形の位置: セル {x}, {y}")
+                
+                # サイズ情報を取得
+                width = getattr(shape, 'width', None)
+                height = getattr(shape, 'height', None)
+                st.write(f"図形のサイズ: 幅 {width}, 高さ {height}")
+                
+                shapes_info.append({
+                    'type': 'shape',
+                    'shape_type': shape_type,
+                    'x': x,
+                    'y': y,
+                    'width': width,
+                    'height': height,
+                    'text': getattr(shape, 'text', '')
+                })
+            except Exception as e:
+                st.warning(f"図形の処理中にエラー: {str(e)}")
+                continue
                     
     except Exception as e:
         st.warning(f"ワークシートの処理中にエラー: {str(e)}")
