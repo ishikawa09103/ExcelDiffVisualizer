@@ -1,4 +1,5 @@
 import pandas as pd
+import streamlit as st
 import numpy as np
 from openpyxl import load_workbook
 from openpyxl.drawing.spreadsheet_drawing import SpreadsheetDrawing
@@ -12,14 +13,24 @@ def extract_shape_info(wb, sheet_name):
     shapes_info = []
     ws = wb[sheet_name]
     
+    # デバッグ出力を追加
+    st.write("シートの描画情報を確認中...")
+    st.write(f"ワークシート: {sheet_name}")
+    
     try:
         # Get drawings from the worksheet
         drawings = ws._drawing if hasattr(ws, '_drawing') else []
         if not drawings and hasattr(ws, 'drawings'):
             drawings = ws.drawings
         
+        # デバッグ出力を追加
+        st.write(f"検出された描画オブジェクト数: {len(drawings) if drawings else 0}")
+        
         # Process each drawing
         for drawing in drawings if drawings else []:
+            # デバッグ出力を追加
+            st.write(f"描画オブジェクトの種類: {type(drawing).__name__}")
+            
             shape_info = {
                 'type': 'unknown',
                 'x': 0,

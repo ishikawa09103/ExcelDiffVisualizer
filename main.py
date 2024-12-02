@@ -48,8 +48,11 @@ def main():
             sheet2_name = wb2.active.title
             
             # Extract and compare shapes
+            st.write("画像の比較を開始...")
             shapes1 = comparison.extract_shape_info(wb1, sheet1_name)
+            st.write(f"ファイル1の画像数: {len(shapes1)}")
             shapes2 = comparison.extract_shape_info(wb2, sheet2_name)
+            st.write(f"ファイル2の画像数: {len(shapes2)}")
             shape_differences = comparison.compare_shapes(shapes1, shapes2)
             
             # Compare dataframes
