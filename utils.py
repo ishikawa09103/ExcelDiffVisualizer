@@ -4,6 +4,27 @@ import pandas as pd
 import io
 from datetime import datetime
 
+def get_excel_cell_reference(column_index, row_index):
+    """
+    Convert 0-based column and row indices to Excel cell reference (e.g., A1, B2)
+    """
+    def get_column_letter(col_idx):
+        result = ""
+        while col_idx >= 0:
+            result = chr(65 + (col_idx % 26)) + result
+            col_idx = col_idx // 26 - 1
+        return result
+    
+    return f"{get_column_letter(column_index)}{row_index + 1}"
+
+def get_excel_range_reference(row_index, start_col_index, end_col_index):
+    """
+    Get Excel range reference for a row (e.g., A5:E5)
+    """
+    start_ref = get_excel_cell_reference(start_col_index, row_index)
+    end_ref = get_excel_cell_reference(end_col_index, row_index)
+    return f"{start_ref}:{end_ref}"
+
 def create_grid(df, cell_styles=None):
     gb = GridOptionsBuilder.from_dataframe(df)
     
@@ -82,29 +103,37 @@ def export_comparison(comparison_result):
         # Write data differences
         comparison_result['df1'].to_excel(writer, sheet_name='File1', index=False)
         comparison_result['df2'].to_excel(writer, sheet_name='File2', index=False)
-        # Create a more detailed summary DataFrame
+        # Create a more detailed summary DataFrame with Excel-style cell references
         summary_data = []
         for diff in comparison_result['diff_summary'].to_dict('records'):
             if diff['type'] == 'modified':
+                col_idx = comparison_result['df1'].columns.get_loc(diff['column'])
+                cell_ref_old = get_excel_cell_reference(col_idx, diff['row_index_old'])
+                cell_ref_new = get_excel_cell_reference(col_idx, diff['row_index_new'])
                 summary_data.append({
                     '変更タイプ': '変更',
-                    '列': diff['column'],
-                    '行 (変更前)': diff['row_index_old'],
-                    '行 (変更後)': diff['row_index_new'],
+                    'セル位置 (変更前)': cell_ref_old,
+                    'セル位置 (変更後)': cell_ref_new,
                     '変更前の値': diff['value_old'],
                     '変更後の値': diff['value_new'],
                     '類似度': f"{diff.get('similarity', 1.0):.2%}"
                 })
             else:
-                values = diff['values']
-                for col, val in values.items():
-                    summary_data.append({
-                        '変更タイプ': '行追加' if diff['type'] == 'added' else '削除',
-                        '列': col,
-                        '行': diff['row_index'],
-                        '値': val,
-                        '類似度': 'N/A'
-                    })
+                row_idx = diff['row_index']
+                df = comparison_result['df1']
+                range_ref = get_excel_range_reference(row_idx, 0, len(df.columns) - 1)
+                row_values = []
+                for col in df.columns:
+                    val = diff['values'].get(col, '')
+                    if pd.notna(val):
+                        row_values.append(f"{col}: {val}")
+                
+                summary_data.append({
+                    '変更タイプ': '行追加' if diff['type'] == 'added' else '削除',
+                    'セル位置': f"{row_idx + 1}行目 ({range_ref})",
+                    '値': ' | '.join(row_values),
+                    '類似度': 'N/A'
+                })
         
         summary_df = pd.DataFrame(summary_data)
         if not summary_df.empty:

@@ -83,23 +83,30 @@ def main():
             summary_data = []
             for diff in comparison_result['diff_summary'].to_dict('records'):
                 if diff['type'] == 'modified':
+                    col_idx = df1.columns.get_loc(diff['column'])
+                    cell_ref_old = utils.get_excel_cell_reference(col_idx, diff['row_index_old'])
+                    cell_ref_new = utils.get_excel_cell_reference(col_idx, diff['row_index_new'])
                     summary_data.append({
                         '変更タイプ': '変更',
-                        '列': diff['column'],
-                        '行 (変更前)': diff['row_index_old'],
-                        '行 (変更後)': diff['row_index_new'],
+                        'セル位置 (変更前)': cell_ref_old,
+                        'セル位置 (変更後)': cell_ref_new,
                         '変更前の値': diff['value_old'],
                         '変更後の値': diff['value_new']
                     })
                 else:
-                    values = diff['values']
-                    for col, val in values.items():
-                        summary_data.append({
-                            '変更タイプ': '行追加' if diff['type'] == 'added' else '削除',
-                            '列': col,
-                            '行': diff['row_index'],
-                            '値': val
-                        })
+                    row_idx = diff['row_index']
+                    range_ref = utils.get_excel_range_reference(row_idx, 0, len(df1.columns) - 1)
+                    row_values = []
+                    for col in df1.columns:
+                        val = diff['values'].get(col, '')
+                        if pd.notna(val):
+                            row_values.append(f"{col}: {val}")
+                    
+                    summary_data.append({
+                        '変更タイプ': '行追加' if diff['type'] == 'added' else '削除',
+                        'セル位置': f"{row_idx + 1}行目 ({range_ref})",
+                        '値': ' | '.join(row_values)
+                    })
 
             if summary_data:
                 summary_df = pd.DataFrame(summary_data)
