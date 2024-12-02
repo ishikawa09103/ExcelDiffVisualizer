@@ -2,6 +2,7 @@ import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 import pandas as pd
 import io
+from datetime import datetime
 
 def create_grid(df, cell_styles=None):
     gb = GridOptionsBuilder.from_dataframe(df)
@@ -96,6 +97,6 @@ def export_comparison(comparison_result):
     st.download_button(
         label="Download Comparison Report",
         data=output,
-        file_name="comparison_report.xlsx",
+        file_name=f"comparison_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
