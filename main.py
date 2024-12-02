@@ -81,13 +81,15 @@ def main():
 
             # Create summary DataFrame
             summary_data = []
+            
+            # データの差分を追加
             for diff in comparison_result['diff_summary'].to_dict('records'):
                 if diff['type'] == 'modified':
                     col_idx = df1.columns.get_loc(diff['column'])
                     cell_ref_old = utils.get_excel_cell_reference(col_idx, diff['row_index_old'])
                     cell_ref_new = utils.get_excel_cell_reference(col_idx, diff['row_index_new'])
                     summary_data.append({
-                        '変更タイプ': '変更',
+                        '変更タイプ': 'データ変更',
                         'セル位置 (変更前)': cell_ref_old,
                         'セル位置 (変更後)': cell_ref_new,
                         '変更前の値': diff['value_old'],
@@ -103,10 +105,44 @@ def main():
                             row_values.append(f"{col}: {val}")
                     
                     summary_data.append({
-                        '変更タイプ': '行追加' if diff['type'] == 'added' else '削除',
+                        '変更タイプ': 'データ追加' if diff['type'] == 'added' else 'データ削除',
                         'セル位置': f"{row_idx + 1}行目 ({range_ref})",
                         '値': ' | '.join(row_values)
                     })
+            
+            # 画像の差分を追加
+            for diff in shape_differences:
+                if diff['type'] == 'added':
+                    shape = diff['shape']
+                    if shape['type'] == 'image':
+                        cell_ref = utils.get_excel_cell_reference(shape['x'], shape['y'])
+                        summary_data.append({
+                            '変更タイプ': '画像追加',
+                            'セル位置': cell_ref,
+                            '値': f"サイズ: 幅 {shape['width']:.1f}px, 高さ {shape['height']:.1f}px"
+                        })
+                elif diff['type'] == 'deleted':
+                    shape = diff['shape']
+                    if shape['type'] == 'image':
+                        cell_ref = utils.get_excel_cell_reference(shape['x'], shape['y'])
+                        summary_data.append({
+                            '変更タイプ': '画像削除',
+                            'セル位置': cell_ref,
+                            '値': f"サイズ: 幅 {shape['width']:.1f}px, 高さ {shape['height']:.1f}px"
+                        })
+                else:  # modified
+                    old_shape = diff['old_shape']
+                    new_shape = diff['new_shape']
+                    if old_shape['type'] == 'image' and new_shape['type'] == 'image':
+                        cell_ref_old = utils.get_excel_cell_reference(old_shape['x'], old_shape['y'])
+                        cell_ref_new = utils.get_excel_cell_reference(new_shape['x'], new_shape['y'])
+                        summary_data.append({
+                            '変更タイプ': '画像変更',
+                            'セル位置 (変更前)': cell_ref_old,
+                            'セル位置 (変更後)': cell_ref_new,
+                            '変更前の値': f"サイズ: 幅 {old_shape['width']:.1f}px, 高さ {old_shape['height']:.1f}px",
+                            '変更後の値': f"サイズ: 幅 {new_shape['width']:.1f}px, 高さ {new_shape['height']:.1f}px"
+                        })
 
             if summary_data:
                 summary_df = pd.DataFrame(summary_data)
