@@ -10,54 +10,57 @@ def extract_shape_info(wb, sheet_name):
     shapes_info = []
     ws = wb[sheet_name]
     
-    st.write("シートの描画情報を確認中...")
-    st.write(f"ワークシート: {sheet_name}")
-    
     try:
-        # 画像取得方法の追加
-        image_files = []
+        # Method 1: _drawing.drawingsから画像を取得
+        if hasattr(ws, '_drawing') and ws._drawing:
+            for shape in ws._drawing.drawings:
+                try:
+                    if hasattr(shape, '_rel') and shape._rel.target:
+                        # 画像情報を取得
+                        x = getattr(shape, 'col', 0) or 0
+                        y = getattr(shape, 'row', 0) or 0
+                        width = getattr(shape, 'width', None)
+                        height = getattr(shape, 'height', None)
+                        
+                        shapes_info.append({
+                            'type': 'image',
+                            'x': x,
+                            'y': y,
+                            'width': width,
+                            'height': height,
+                            'text': ''
+                        })
+                except Exception as e:
+                    st.warning(f"画像の処理中にエラー: {str(e)}")
+                    continue
         
-        # Method 1: Using _images
+        # Method 2: _imagesから画像を取得
         if hasattr(ws, '_images'):
-            image_files.extend(ws._images)
-            
-        # Method 2: Using drawings
-        drawings = []
-        if hasattr(ws, '_drawing'):
-            drawings.extend(ws._drawing.drawings if ws._drawing else [])
-        if hasattr(ws, 'drawings'):
-            drawings.extend(ws.drawings)
-            
-        # Method 3: Using anchors
-        for drawing in drawings:
-            if isinstance(drawing, SpreadsheetDrawing):
-                for rel in drawing._rels.values():
-                    if isinstance(rel.target, Image):
-                        image_files.append(rel.target)
-        
-        st.write(f"検出された画像ファイル数: {len(image_files)}")
-        
-        # Process each image
-        for img in image_files:
-            try:
-                anchor = getattr(img, 'anchor', None)
-                if anchor:
-                    shape_info = {
-                        'type': 'image',
-                        'x': getattr(anchor, 'col', 0),
-                        'y': getattr(anchor, 'row', 0),
-                        'width': getattr(anchor, 'width', None),
-                        'height': getattr(anchor, 'height', None),
-                        'description': getattr(img, 'description', '')
-                    }
-                    shapes_info.append(shape_info)
-                    st.write(f"画像情報を追加: {shape_info}")
-            except Exception as img_error:
-                st.warning(f"画像の処理中にエラー: {str(img_error)}")
-                
-    except Exception as ws_error:
-        st.warning(f"ワークシートの処理中にエラー: {str(ws_error)}")
+            for img in ws._images:
+                try:
+                    anchor = getattr(img, 'anchor', None)
+                    if anchor:
+                        x = getattr(anchor, 'col', 0) or 0
+                        y = getattr(anchor, 'row', 0) or 0
+                        width = getattr(anchor, 'width', None)
+                        height = getattr(anchor, 'height', None)
+                        
+                        shapes_info.append({
+                            'type': 'image',
+                            'x': x,
+                            'y': y,
+                            'width': width,
+                            'height': height,
+                            'text': ''
+                        })
+                except Exception as e:
+                    st.warning(f"画像の処理中にエラー: {str(e)}")
+                    continue
+                    
+    except Exception as e:
+        st.warning(f"ワークシートの処理中にエラー: {str(e)}")
     
+    st.write(f"検出された画像数: {len(shapes_info)}")
     return shapes_info
 
 def compare_shapes(shapes1, shapes2):
