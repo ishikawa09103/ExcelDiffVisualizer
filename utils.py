@@ -82,7 +82,33 @@ def export_comparison(comparison_result):
         # Write data differences
         comparison_result['df1'].to_excel(writer, sheet_name='File1', index=False)
         comparison_result['df2'].to_excel(writer, sheet_name='File2', index=False)
-        comparison_result['diff_summary'].to_excel(writer, sheet_name='Data_Summary', index=False)
+        # Create a more detailed summary DataFrame
+        summary_data = []
+        for diff in comparison_result['diff_summary'].to_dict('records'):
+            if diff['type'] == 'modified':
+                summary_data.append({
+                    'Change Type': 'Modified',
+                    'Column': diff['column'],
+                    'Row (Old)': diff['row_index_old'],
+                    'Row (New)': diff['row_index_new'],
+                    'Old Value': diff['value_old'],
+                    'New Value': diff['value_new'],
+                    'Similarity': f"{diff.get('similarity', 1.0):.2%}"
+                })
+            else:
+                values = diff['values']
+                for col, val in values.items():
+                    summary_data.append({
+                        'Change Type': 'Added' if diff['type'] == 'added' else 'Deleted',
+                        'Column': col,
+                        'Row': diff['row_index'],
+                        'Value': val,
+                        'Similarity': 'N/A'
+                    })
+        
+        summary_df = pd.DataFrame(summary_data)
+        if not summary_df.empty:
+            summary_df.to_excel(writer, sheet_name='Data_Summary', index=False)
         
         # Write shape differences
         if 'shape_differences' in comparison_result:
