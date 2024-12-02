@@ -49,6 +49,34 @@ def create_grid(df, cell_styles=None):
         }
     )
 
+def display_shape_differences(shape_differences):
+    """Display shape differences in a formatted table"""
+    if not shape_differences:
+        st.info("No shape differences found")
+        return
+    
+    st.markdown("### Shape Differences")
+    
+    for diff in shape_differences:
+        with st.expander(f"{diff['type'].title()}: {diff['shape_name']}"):
+            if diff['type'] == 'added':
+                st.markdown("**New Shape Added**")
+                st.json(diff['details'])
+            elif diff['type'] == 'deleted':
+                st.markdown("**Shape Deleted**")
+                st.json(diff['details'])
+            elif diff['type'] == 'modified':
+                st.markdown("**Shape Modified**")
+                for attr, changes in diff['differences'].items():
+                    st.markdown(f"**{attr}:**")
+                    cols = st.columns(2)
+                    with cols[0]:
+                        st.markdown("Old value:")
+                        st.code(str(changes['old']))
+                    with cols[1]:
+                        st.markdown("New value:")
+                        st.code(str(changes['new']))
+
 def export_comparison(comparison_result):
     output = io.BytesIO()
     
@@ -57,6 +85,11 @@ def export_comparison(comparison_result):
         comparison_result['df1'].to_excel(writer, sheet_name='File1', index=False)
         comparison_result['df2'].to_excel(writer, sheet_name='File2', index=False)
         comparison_result['diff_summary'].to_excel(writer, sheet_name='Summary', index=False)
+        
+        # Export shape differences if available
+        if comparison_result.get('shape_differences'):
+            shape_diff_df = pd.DataFrame(comparison_result['shape_differences'])
+            shape_diff_df.to_excel(writer, sheet_name='Shape Differences', index=False)
     
     # Prepare the file for download
     output.seek(0)
