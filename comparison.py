@@ -133,15 +133,34 @@ def extract_shape_info(wb, sheet_name):
         
         # 3. チャートオブジェクトの検出
         st.write("3. チャートオブジェクトの検索...")
-        for chart_rel_id, chart in ws._charts.items():
+        if hasattr(ws, '_charts'):
             try:
-                st.write(f"チャートを検出: {chart_rel_id}")
-                shape_info = _process_drawing(chart, 'chart')
-                if shape_info:
-                    shapes_info.append(shape_info)
-                    st.write(f"チャートの位置: ({shape_info['x']}, {shape_info['y']})")
+                # _chartsがリストの場合の処理
+                if isinstance(ws._charts, list):
+                    for chart in ws._charts:
+                        st.write(f"チャートを検出: {chart}")
+                        shape_info = _process_drawing(chart, 'chart')
+                        if shape_info:
+                            shapes_info.append(shape_info)
+                            st.write(f"チャートの位置: ({shape_info['x']}, {shape_info['y']})")
+                # _chartsが辞書の場合の処理
+                elif hasattr(ws._charts, 'items'):
+                    for chart_rel_id, chart in ws._charts.items():
+                        st.write(f"チャートを検出: {chart_rel_id}")
+                        shape_info = _process_drawing(chart, 'chart')
+                        if shape_info:
+                            shapes_info.append(shape_info)
+                            st.write(f"チャートの位置: ({shape_info['x']}, {shape_info['y']})")
+                # その他の場合（単一オブジェクトの場合）
+                else:
+                    st.write(f"チャートを検出: {ws._charts}")
+                    shape_info = _process_drawing(ws._charts, 'chart')
+                    if shape_info:
+                        shapes_info.append(shape_info)
+                        st.write(f"チャートの位置: ({shape_info['x']}, {shape_info['y']})")
             except Exception as e:
                 st.warning(f"チャートの処理中にエラー: {str(e)}")
+                st.write(f"_chartsの型: {type(ws._charts)}")
         
         # 検出結果のサマリー表示
         st.write("\n図形検出サマリー:")
