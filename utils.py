@@ -73,24 +73,72 @@ def create_grid(df, cell_styles=None):
 
 def display_shape_differences(shape_differences):
     """
-    Display shape differences in a formatted way
+    Display shape differences in a formatted way with improved image information
     """
     for diff in shape_differences:
         if diff['type'] == 'added':
-            st.markdown(f"🟢 **Added Shape:**")
-            st.json(diff['shape'])
+            shape = diff['shape']
+            st.markdown(f"🟢 **追加された要素:**")
+            if shape['type'] == 'image':
+                st.markdown(f"""
+                - 種類: 画像
+                - 位置: セル {get_excel_cell_reference(shape['x'], shape['y'])}
+                - サイズ: 幅 {shape['width']:.1f}px, 高さ {shape['height']:.1f}px
+                """)
+            else:
+                st.markdown(f"""
+                - 種類: {shape['type']}
+                - 位置: セル {get_excel_cell_reference(shape['x'], shape['y'])}
+                - テキスト: {shape['text'] if shape['text'] else 'なし'}
+                """)
         elif diff['type'] == 'deleted':
-            st.markdown(f"🔴 **Deleted Shape:**")
-            st.json(diff['shape'])
+            shape = diff['shape']
+            st.markdown(f"🔴 **削除された要素:**")
+            if shape['type'] == 'image':
+                st.markdown(f"""
+                - 種類: 画像
+                - 位置: セル {get_excel_cell_reference(shape['x'], shape['y'])}
+                - サイズ: 幅 {shape['width']:.1f}px, 高さ {shape['height']:.1f}px
+                """)
+            else:
+                st.markdown(f"""
+                - 種類: {shape['type']}
+                - 位置: セル {get_excel_cell_reference(shape['x'], shape['y'])}
+                - テキスト: {shape['text'] if shape['text'] else 'なし'}
+                """)
         else:  # modified
-            st.markdown(f"🟡 **Modified Shape:**")
+            st.markdown(f"🟡 **変更された要素:**")
             col1, col2 = st.columns(2)
             with col1:
-                st.markdown("Original:")
-                st.json(diff['old_shape'])
+                old_shape = diff['old_shape']
+                st.markdown("**変更前:**")
+                if old_shape['type'] == 'image':
+                    st.markdown(f"""
+                    - 種類: 画像
+                    - 位置: セル {get_excel_cell_reference(old_shape['x'], old_shape['y'])}
+                    - サイズ: 幅 {old_shape['width']:.1f}px, 高さ {old_shape['height']:.1f}px
+                    """)
+                else:
+                    st.markdown(f"""
+                    - 種類: {old_shape['type']}
+                    - 位置: セル {get_excel_cell_reference(old_shape['x'], old_shape['y'])}
+                    - テキスト: {old_shape['text'] if old_shape['text'] else 'なし'}
+                    """)
             with col2:
-                st.markdown("Modified:")
-                st.json(diff['new_shape'])
+                new_shape = diff['new_shape']
+                st.markdown("**変更後:**")
+                if new_shape['type'] == 'image':
+                    st.markdown(f"""
+                    - 種類: 画像
+                    - 位置: セル {get_excel_cell_reference(new_shape['x'], new_shape['y'])}
+                    - サイズ: 幅 {new_shape['width']:.1f}px, 高さ {new_shape['height']:.1f}px
+                    """)
+                else:
+                    st.markdown(f"""
+                    - 種類: {new_shape['type']}
+                    - 位置: セル {get_excel_cell_reference(new_shape['x'], new_shape['y'])}
+                    - テキスト: {new_shape['text'] if new_shape['text'] else 'なし'}
+                    """)
 
 def export_comparison(comparison_result):
     """
