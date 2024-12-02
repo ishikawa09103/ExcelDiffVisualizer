@@ -4,35 +4,57 @@ from openpyxl import load_workbook
 from openpyxl.drawing.spreadsheet_drawing import AbsoluteAnchor
 from openpyxl.drawing.xdr import XDRPoint2D, XDRPositiveSize2D
 
+def _get_coordinates(item):
+    coords = {'x': 0, 'y': 0, 'width': 0, 'height': 0}
+    
+    try:
+        if hasattr(item, 'anchor'):
+            if isinstance(item.anchor, AbsoluteAnchor):
+                coords.update({
+                    'x': item.anchor.pos.x.val,
+                    'y': item.anchor.pos.y.val
+                })
+    except Exception as e:
+        print(f"Debug: Error getting coordinates: {str(e)}")
+    
+    return coords
+
+def _process_drawing_item(item):
+    try:
+        # Extract common properties
+        shape_info = {
+            'type': type(item).__name__,
+            'name': getattr(item, 'name', ''),
+            'coordinates': _get_coordinates(item)
+        }
+        
+        # Add specific properties based on shape type
+        if hasattr(item, 'description'):
+            shape_info['description'] = item.description
+            
+        return shape_info
+    except Exception as e:
+        print(f"Debug: Error processing drawing item: {str(e)}")
+        return None
+
 def extract_shape_info(workbook, sheet_name):
-    """Extract shape information from an Excel worksheet"""
     sheet = workbook[sheet_name]
     shapes = []
     
     try:
-        # Use _drawings instead of _shapes
-        for drawing in sheet._drawings:
-            for shape in drawing.shapes:
-                try:
-                    shape_info = {
-                        'type': shape.shape_type if hasattr(shape, 'shape_type') else type(shape).__name__,
-                        'name': shape.name if hasattr(shape, 'name') else '',
-                        'description': shape.description if hasattr(shape, 'description') else '',
-                        'coordinates': {
-                            'x': shape.left if hasattr(shape, 'left') else 0,
-                            'y': shape.top if hasattr(shape, 'top') else 0,
-                            'width': shape.width if hasattr(shape, 'width') else 0,
-                            'height': shape.height if hasattr(shape, 'height') else 0
-                        }
-                    }
-                    shapes.append(shape_info)
-                except Exception as e:
-                    print(f"Warning: Error processing shape: {str(e)}")
-                    continue
-    except AttributeError:
-        print(f"Info: No shapes found in sheet '{sheet_name}'")
+        # Get shapes from all drawing types
+        for drawing_type in ['_charts', '_images', '_drawing']:
+            if hasattr(sheet, drawing_type):
+                drawing_obj = getattr(sheet, drawing_type)
+                if isinstance(drawing_obj, list):
+                    for item in drawing_obj:
+                        shape_info = _process_drawing_item(item)
+                        if shape_info:
+                            shapes.append(shape_info)
+                            print(f"Debug: Found shape: {shape_info['type']} - {shape_info['name']}")
+    
     except Exception as e:
-        print(f"Error: Failed to process shapes in sheet '{sheet_name}': {str(e)}")
+        print(f"Debug: Error in shape extraction: {str(e)}")
     
     return shapes
 
