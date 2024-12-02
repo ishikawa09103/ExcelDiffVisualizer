@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from st_aggrid import AgGrid, GridOptionsBuilder
-from st_aggrid.shared import GridUpdateMode
 import comparison
 import utils
 import styles
@@ -45,11 +44,11 @@ def main():
             
             with col1:
                 st.markdown("### File 1")
-                grid1 = utils.create_grid(comparison_result['df1_styled'])
+                grid1 = utils.create_grid(comparison_result['df1'], comparison_result['df1_styles'])
                 
             with col2:
                 st.markdown("### File 2")
-                grid2 = utils.create_grid(comparison_result['df2_styled'])
+                grid2 = utils.create_grid(comparison_result['df2'], comparison_result['df2_styles'])
             
             # Export options
             st.subheader("Export Results")

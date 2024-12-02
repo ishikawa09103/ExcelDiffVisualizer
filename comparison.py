@@ -3,15 +3,15 @@ import numpy as np
 
 def compare_dataframes(df1, df2):
     """
-    Compare two dataframes and return styled versions with differences highlighted
+    Compare two dataframes and return DataFrames with style information for AgGrid
     """
     # Create copies for styling
-    df1_styled = df1.copy()
-    df2_styled = df2.copy()
+    df1_result = df1.copy()
+    df2_result = df2.copy()
     
-    # Initialize style dataframes
-    df1_style = pd.DataFrame('', index=df1.index, columns=df1.columns)
-    df2_style = pd.DataFrame('', index=df2.index, columns=df2.columns)
+    # Initialize style information
+    df1_styles = []
+    df2_styles = []
     
     # Compare common columns
     common_cols = list(set(df1.columns) & set(df2.columns))
@@ -36,7 +36,11 @@ def compare_dataframes(df1, df2):
             if pd.isna(val1) and not pd.isna(val2):
                 # Added in df2
                 if idx < len(df2):
-                    df2_style.loc[idx, col] = 'added'
+                    df2_styles.append({
+                        'field': col,
+                        'rowIndex': idx,
+                        'cellClass': 'ag-cell-added'
+                    })
                     differences.append({
                         'type': 'added',
                         'column': col,
@@ -46,7 +50,11 @@ def compare_dataframes(df1, df2):
             elif not pd.isna(val1) and pd.isna(val2):
                 # Deleted in df2
                 if idx < len(df1):
-                    df1_style.loc[idx, col] = 'deleted'
+                    df1_styles.append({
+                        'field': col,
+                        'rowIndex': idx,
+                        'cellClass': 'ag-cell-deleted'
+                    })
                     differences.append({
                         'type': 'deleted',
                         'column': col,
@@ -56,9 +64,17 @@ def compare_dataframes(df1, df2):
             elif not pd.isna(val1) and not pd.isna(val2) and val1 != val2:
                 # Modified
                 if idx < len(df1):
-                    df1_style.loc[idx, col] = 'modified'
+                    df1_styles.append({
+                        'field': col,
+                        'rowIndex': idx,
+                        'cellClass': 'ag-cell-modified'
+                    })
                 if idx < len(df2):
-                    df2_style.loc[idx, col] = 'modified'
+                    df2_styles.append({
+                        'field': col,
+                        'rowIndex': idx,
+                        'cellClass': 'ag-cell-modified'
+                    })
                 differences.append({
                     'type': 'modified',
                     'column': col,
@@ -67,24 +83,13 @@ def compare_dataframes(df1, df2):
                     'value_new': val2
                 })
     
-    # Apply styles
-    def apply_styles(val, style):
-        if style == 'modified':
-            return 'background-color: #FFF3CD'
-        elif style == 'added':
-            return 'background-color: #D4EDDA'
-        elif style == 'deleted':
-            return 'background-color: #F8D7DA'
-        return ''
-    
-    df1_styled = df1_styled.style.apply(lambda x: df1_style.applymap(apply_styles))
-    df2_styled = df2_styled.style.apply(lambda x: df2_style.applymap(apply_styles))
-    
     # Create difference summary
     diff_summary = pd.DataFrame(differences)
     
     return {
-        'df1_styled': df1_styled,
-        'df2_styled': df2_styled,
+        'df1': df1_result,
+        'df2': df2_result,
+        'df1_styles': df1_styles,
+        'df2_styles': df2_styles,
         'diff_summary': diff_summary
     }
