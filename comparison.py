@@ -125,8 +125,7 @@ def compare_shapes(shapes1, shapes2):
 
 def compare_dataframes(df1, df2):
     """
-    Compare two dataframes and return DataFrames with style information for AgGrid
-    using an improved row matching algorithm that correctly handles added rows
+    Compare two dataframes and return differences with improved row matching
     """
     # Create copies for styling
     df1_result = df1.copy()
@@ -137,103 +136,123 @@ def compare_dataframes(df1, df2):
     df2_styles = []
     differences = []
     
-    # Compare common columns
+    # Get common columns
     common_cols = list(set(df1.columns) & set(df2.columns))
     
-    # Create row signature for better matching
-    def create_row_signature(row):
-        # Use key columns if they exist (e.g., ID, Name, etc.)
-        key_columns = [col for col in common_cols if any(key in col.lower() 
-                      for key in ['id', 'code', 'key', 'name', 'no'])]
-        
-        if key_columns:
-            values = [str(row[col]).strip() if pd.notna(row[col]) else '' 
-                     for col in key_columns]
-        else:
-            # If no key columns, use all columns but give more weight to the first few
-            values = [str(row[col]).strip() if pd.notna(row[col]) else '' 
-                     for col in common_cols[:3]]
-            
+    # Identify potential key columns
+    key_columns = [col for col in common_cols if any(key in col.lower() 
+                  for key in ['id', 'code', 'key', 'name', 'no', '番号'])]
+    
+    if not key_columns:
+        # If no key columns found, use the first column and additional columns for better matching
+        key_columns = common_cols[:min(3, len(common_cols))]
+    
+    def create_row_hash(row):
+        """Create a hash value for row matching based on key columns"""
+        values = []
+        for col in key_columns:
+            val = row[col]
+            # Handle different data types appropriately
+            if pd.isna(val):
+                values.append('')
+            elif isinstance(val, (int, float)):
+                values.append(str(int(val) if val.is_integer() else val))
+            else:
+                values.append(str(val).strip())
         return '||'.join(values)
     
-    # Create signatures for both dataframes
-    df1_signatures = df1.apply(create_row_signature, axis=1)
-    df2_signatures = df2.apply(create_row_signature, axis=1)
+    # Create hash values for both dataframes
+    df1['_row_hash'] = df1.apply(create_row_hash, axis=1)
+    df2['_row_hash'] = df2.apply(create_row_hash, axis=1)
     
-    # Track matched rows
-    matched_rows_df1 = set()
-    matched_rows_df2 = set()
+    # Initialize tracking sets
+    matched_df1_indices = set()
+    matched_df2_indices = set()
     
-    # First pass: Find exact matches using signatures
-    signature_matches = {}
-    for idx1, sig1 in enumerate(df1_signatures):
-        if sig1 in df2_signatures.values:
-            idx2 = df2_signatures[df2_signatures == sig1].index[0]
-            signature_matches[idx1] = idx2
-            matched_rows_df1.add(idx1)
-            matched_rows_df2.add(idx2)
-            
-            # Check for modifications in exactly matched rows
-            row1, row2 = df1.iloc[idx1], df2.iloc[idx2]
-            for col in common_cols:
-                val1 = str(row1[col]).strip() if pd.notna(row1[col]) else ''
-                val2 = str(row2[col]).strip() if pd.notna(row2[col]) else ''
-                if val1 != val2:
-                    df1_styles.append({
-                        'field': col,
-                        'rowIndex': idx1,
-                        'cellClass': 'ag-cell-modified'
-                    })
-                    df2_styles.append({
-                        'field': col,
-                        'rowIndex': idx2,
-                        'cellClass': 'ag-cell-modified'
-                    })
-                    differences.append({
-                        'type': 'modified',
-                        'column': col,
-                        'row_index_old': idx1,
-                        'row_index_new': idx2,
-                        'value_old': val1,
-                        'value_new': val2,
-                        'similarity': 1.0
-                    })
+    # First pass: Find exact matches using hash values
+    hash_map_df2 = {hash_val: idx for idx, hash_val in enumerate(df2['_row_hash'])}
+    
+    for idx1, hash_val in enumerate(df1['_row_hash']):
+        if hash_val in hash_map_df2:
+            idx2 = hash_map_df2[hash_val]
+            if idx2 not in matched_df2_indices:
+                matched_df1_indices.add(idx1)
+                matched_df2_indices.add(idx2)
+                
+                # Check for modifications in matched rows
+                row1, row2 = df1.iloc[idx1], df2.iloc[idx2]
+                for col in common_cols:
+                    val1 = str(row1[col]).strip() if pd.notna(row1[col]) else ''
+                    val2 = str(row2[col]).strip() if pd.notna(row2[col]) else ''
+                    if val1 != val2:
+                        df1_styles.append({
+                            'field': col,
+                            'rowIndex': idx1,
+                            'cellClass': 'ag-cell-modified'
+                        })
+                        df2_styles.append({
+                            'field': col,
+                            'rowIndex': idx2,
+                            'cellClass': 'ag-cell-modified'
+                        })
+                        differences.append({
+                            'type': 'modified',
+                            'column': col,
+                            'row_index_old': idx1,
+                            'row_index_new': idx2,
+                            'value_old': val1,
+                            'value_new': val2
+                        })
     
     # Second pass: Handle remaining rows using similarity matching
-    def calculate_similarity(row1, row2):
+    def calculate_row_similarity(row1, row2):
+        """Calculate similarity between two rows"""
         matches = 0
-        total = len(common_cols)
+        total_weight = 0
+        
         for col in common_cols:
+            # Give more weight to key columns
+            weight = 2.0 if col in key_columns else 1.0
+            total_weight += weight
+            
             val1 = str(row1[col]).strip() if pd.notna(row1[col]) else ''
             val2 = str(row2[col]).strip() if pd.notna(row2[col]) else ''
-            if val1 == val2:
-                matches += 1
-        return matches / total if total > 0 else 0
-    
-    # Process remaining unmatched rows
-    for idx1 in range(len(df1)):
-        if idx1 in matched_rows_df1:
-            continue
             
-        best_match = None
-        best_similarity = 0.7  # Minimum similarity threshold
+            if val1 == val2:
+                matches += weight
+            elif val1 and val2:  # Both values exist but are different
+                # Calculate string similarity for text values
+                similarity = sum(a == b for a, b in zip(val1, val2)) / max(len(val1), len(val2))
+                matches += weight * similarity if similarity > 0.8 else 0
         
-        for idx2 in range(len(df2)):
-            if idx2 in matched_rows_df2:
-                continue
-                
-            similarity = calculate_similarity(df1.iloc[idx1], df2.iloc[idx2])
+        return matches / total_weight if total_weight > 0 else 0
+    
+    # Process unmatched rows with similarity matching
+    unmatched_df1 = [i for i in range(len(df1)) if i not in matched_df1_indices]
+    unmatched_df2 = [i for i in range(len(df2)) if i not in matched_df2_indices]
+    
+    similarity_threshold = 0.8
+    
+    for idx1 in unmatched_df1:
+        best_match = None
+        best_similarity = similarity_threshold
+        row1 = df1.iloc[idx1]
+        
+        for idx2 in unmatched_df2:
+            row2 = df2.iloc[idx2]
+            similarity = calculate_row_similarity(row1, row2)
+            
             if similarity > best_similarity:
                 best_similarity = similarity
                 best_match = idx2
         
         if best_match is not None:
             # Found a similar row
-            matched_rows_df1.add(idx1)
-            matched_rows_df2.add(best_match)
+            matched_df1_indices.add(idx1)
+            matched_df2_indices.add(best_match)
             
             # Mark modified cells
-            row1, row2 = df1.iloc[idx1], df2.iloc[best_match]
+            row2 = df2.iloc[best_match]
             for col in common_cols:
                 val1 = str(row1[col]).strip() if pd.notna(row1[col]) else ''
                 val2 = str(row2[col]).strip() if pd.notna(row2[col]) else ''
@@ -254,11 +273,10 @@ def compare_dataframes(df1, df2):
                         'row_index_old': idx1,
                         'row_index_new': best_match,
                         'value_old': val1,
-                        'value_new': val2,
-                        'similarity': best_similarity
+                        'value_new': val2
                     })
         else:
-            # No match found - row was deleted
+            # No similar row found - this row was deleted
             row = df1.iloc[idx1]
             for col in common_cols:
                 if pd.notna(row[col]):
@@ -275,7 +293,7 @@ def compare_dataframes(df1, df2):
     
     # Mark remaining unmatched rows in df2 as added
     for idx2 in range(len(df2)):
-        if idx2 not in matched_rows_df2:
+        if idx2 not in matched_df2_indices:
             row = df2.iloc[idx2]
             for col in common_cols:
                 if pd.notna(row[col]):
@@ -289,6 +307,10 @@ def compare_dataframes(df1, df2):
                 'row_index': idx2,
                 'values': row[common_cols].to_dict()
             })
+    
+    # Remove temporary hash columns
+    df1_result.drop('_row_hash', axis=1, inplace=True)
+    df2_result.drop('_row_hash', axis=1, inplace=True)
     
     # Create difference summary
     diff_summary = pd.DataFrame(differences)
