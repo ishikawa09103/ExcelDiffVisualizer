@@ -71,6 +71,28 @@ def extract_shape_info(wb, sheet_name):
                 except Exception as e:
                     st.warning(f"画像の処理中にエラー: {str(e)}")
                     continue
+
+        # Method 3: 図形（シェイプ）の検出
+        st.write("図形（シェイプ）オブジェクトの検索...")
+        if hasattr(ws, 'shapes'):
+            for shape in ws.shapes:
+                try:
+                    shape_type = getattr(shape, 'type', 'unknown')
+                    st.write(f"検出された図形の種類: {shape_type}")
+                    st.write(f"図形の位置: {shape.anchor}")
+                    
+                    shapes_info.append({
+                        'type': 'shape',
+                        'shape_type': shape_type,
+                        'x': shape.anchor.col,
+                        'y': shape.anchor.row,
+                        'width': shape.width,
+                        'height': shape.height,
+                        'text': getattr(shape, 'text', '')
+                    })
+                except Exception as e:
+                    st.warning(f"図形の処理中にエラー: {str(e)}")
+                    continue
                     
     except Exception as e:
         st.warning(f"ワークシートの処理中にエラー: {str(e)}")
