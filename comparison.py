@@ -155,8 +155,16 @@ def compare_dataframes(df1, df2):
             # Handle different data types appropriately
             if pd.isna(val):
                 values.append('')
-            elif isinstance(val, (int, float)):
-                values.append(str(int(val) if val.is_integer() else val))
+            elif pd.api.types.is_numeric_dtype(type(val)):
+                try:
+                    if pd.isna(val):
+                        values.append('')
+                    elif np.issubdtype(type(val), np.integer) or (isinstance(val, float) and val.is_integer()):
+                        values.append(str(int(val)))
+                    else:
+                        values.append(str(float(val)))
+                except (AttributeError, ValueError):
+                    values.append(str(val))
             else:
                 values.append(str(val).strip())
         return '||'.join(values)
