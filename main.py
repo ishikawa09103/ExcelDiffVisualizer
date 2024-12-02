@@ -4,6 +4,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder
 import comparison
 import utils
 import styles
+from openpyxl import load_workbook
 
 st.set_page_config(
     page_title="Excel Comparison Tool",
@@ -34,8 +35,28 @@ def main():
             df1 = pd.read_excel(file1)
             df2 = pd.read_excel(file2)
             
+            # Reset file pointers for shape comparison
+            file1.seek(0)
+            file2.seek(0)
+            
+            # Load workbooks for shape comparison
+            wb1 = load_workbook(file1)
+            wb2 = load_workbook(file2)
+            
+            # Get active sheet names
+            sheet1_name = wb1.active.title
+            sheet2_name = wb2.active.title
+            
+            # Extract and compare shapes
+            shapes1 = comparison.extract_shape_info(wb1, sheet1_name)
+            shapes2 = comparison.extract_shape_info(wb2, sheet2_name)
+            shape_differences = comparison.compare_shapes(shapes1, shapes2)
+            
             # Compare dataframes
             comparison_result = comparison.compare_dataframes(df1, df2)
+            
+            # Add shape differences to the comparison result
+            comparison_result['shape_differences'] = shape_differences
             
             # Display comparison results
             st.subheader("Data Comparison")
@@ -49,6 +70,11 @@ def main():
             with col2:
                 st.markdown("### File 2")
                 grid2 = utils.create_grid(comparison_result['df2'], comparison_result['df2_styles'])
+            
+            # Display shape differences
+            if shape_differences:
+                st.subheader("Shape Differences")
+                utils.display_shape_differences(shape_differences)
             
             # Export options
             st.markdown("---")
@@ -64,9 +90,9 @@ def main():
     # Add legend
     st.sidebar.markdown("### Legend")
     st.sidebar.markdown("""
-    - 🟢 Added cells (Green)
-    - 🔴 Deleted cells (Red)
-    - 🟡 Modified cells (Yellow)
+    - 🟢 Added cells/shapes (Green)
+    - 🔴 Deleted cells/shapes (Red)
+    - 🟡 Modified cells/shapes (Yellow)
     """)
 
 if __name__ == "__main__":

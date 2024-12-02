@@ -1,5 +1,83 @@
 import pandas as pd
 import numpy as np
+from openpyxl import load_workbook
+from openpyxl.drawing.spreadsheet_drawing import SpreadsheetDrawing
+from openpyxl.drawing.image import Image
+from openpyxl.drawing.xdr import XDRPoint2D, XDRPositiveSize2D
+
+def extract_shape_info(wb, sheet_name):
+    """
+    Extract shape information from an Excel worksheet
+    """
+    shapes_info = []
+    ws = wb[sheet_name]
+    
+    for shape in ws._drawings:
+        if isinstance(shape, SpreadsheetDrawing):
+            for anchor in shape.anchors:
+                shape_info = {
+                    'type': type(shape).__name__,
+                    'x': anchor.col,
+                    'y': anchor.row,
+                    'width': getattr(anchor, 'width', None),
+                    'height': getattr(anchor, 'height', None),
+                    'text': getattr(shape, 'text', ''),
+                }
+                shapes_info.append(shape_info)
+    
+    return shapes_info
+
+def compare_shapes(shapes1, shapes2):
+    """
+    Compare shapes between two Excel files
+    """
+    differences = []
+    
+    # Find added and modified shapes
+    for idx2, shape2 in enumerate(shapes2):
+        found_match = False
+        for idx1, shape1 in enumerate(shapes1):
+            if (shape1['x'] == shape2['x'] and 
+                shape1['y'] == shape2['y'] and 
+                shape1['type'] == shape2['type']):
+                found_match = True
+                # Check for modifications
+                if (shape1['width'] != shape2['width'] or 
+                    shape1['height'] != shape2['height'] or 
+                    shape1['text'] != shape2['text']):
+                    differences.append({
+                        'type': 'modified',
+                        'shape_index': idx2,
+                        'old_shape': shape1,
+                        'new_shape': shape2
+                    })
+                break
+        
+        if not found_match:
+            differences.append({
+                'type': 'added',
+                'shape_index': idx2,
+                'shape': shape2
+            })
+    
+    # Find deleted shapes
+    for idx1, shape1 in enumerate(shapes1):
+        found_match = False
+        for shape2 in shapes2:
+            if (shape1['x'] == shape2['x'] and 
+                shape1['y'] == shape2['y'] and 
+                shape1['type'] == shape2['type']):
+                found_match = True
+                break
+        
+        if not found_match:
+            differences.append({
+                'type': 'deleted',
+                'shape_index': idx1,
+                'shape': shape1
+            })
+    
+    return differences
 
 def compare_dataframes(df1, df2):
     """

@@ -49,14 +49,45 @@ def create_grid(df, cell_styles=None):
         }
     )
 
+def display_shape_differences(shape_differences):
+    """
+    Display shape differences in a formatted way
+    """
+    for diff in shape_differences:
+        if diff['type'] == 'added':
+            st.markdown(f"🟢 **Added Shape:**")
+            st.json(diff['shape'])
+        elif diff['type'] == 'deleted':
+            st.markdown(f"🔴 **Deleted Shape:**")
+            st.json(diff['shape'])
+        else:  # modified
+            st.markdown(f"🟡 **Modified Shape:**")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("Original:")
+                st.json(diff['old_shape'])
+            with col2:
+                st.markdown("Modified:")
+                st.json(diff['new_shape'])
+
 def export_comparison(comparison_result):
+    """
+    Export comparison results including shape differences
+    """
     output = io.BytesIO()
     
     # Create Excel writer object
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Write data differences
         comparison_result['df1'].to_excel(writer, sheet_name='File1', index=False)
         comparison_result['df2'].to_excel(writer, sheet_name='File2', index=False)
-        comparison_result['diff_summary'].to_excel(writer, sheet_name='Summary', index=False)
+        comparison_result['diff_summary'].to_excel(writer, sheet_name='Data_Summary', index=False)
+        
+        # Write shape differences
+        if 'shape_differences' in comparison_result:
+            shape_diff_df = pd.DataFrame(comparison_result['shape_differences'])
+            if not shape_diff_df.empty:
+                shape_diff_df.to_excel(writer, sheet_name='Shape_Differences', index=False)
     
     # Prepare the file for download
     output.seek(0)
