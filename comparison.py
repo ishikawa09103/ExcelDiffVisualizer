@@ -102,15 +102,34 @@ def extract_shape_info(wb, sheet_name):
         
         # 2. 画像オブジェクトの検出
         st.write("2. 画像オブジェクトの検索...")
-        for image_rel_id, image in ws._images.items():
+        if hasattr(ws, '_images'):
             try:
-                st.write(f"画像を検出: {image_rel_id}")
-                shape_info = _process_drawing(image, 'image')
-                if shape_info:
-                    shapes_info.append(shape_info)
-                    st.write(f"画像の位置: ({shape_info['x']}, {shape_info['y']})")
+                # _imagesがリストの場合の処理
+                if isinstance(ws._images, list):
+                    for image in ws._images:
+                        st.write(f"画像を検出: {image}")
+                        shape_info = _process_drawing(image, 'image')
+                        if shape_info:
+                            shapes_info.append(shape_info)
+                            st.write(f"画像の位置: ({shape_info['x']}, {shape_info['y']})")
+                # _imagesが辞書の場合の処理
+                elif hasattr(ws._images, 'items'):
+                    for image_rel_id, image in ws._images.items():
+                        st.write(f"画像を検出: {image_rel_id}")
+                        shape_info = _process_drawing(image, 'image')
+                        if shape_info:
+                            shapes_info.append(shape_info)
+                            st.write(f"画像の位置: ({shape_info['x']}, {shape_info['y']})")
+                # その他の場合（単一オブジェクトの場合）
+                else:
+                    st.write(f"画像を検出: {ws._images}")
+                    shape_info = _process_drawing(ws._images, 'image')
+                    if shape_info:
+                        shapes_info.append(shape_info)
+                        st.write(f"画像の位置: ({shape_info['x']}, {shape_info['y']})")
             except Exception as e:
                 st.warning(f"画像の処理中にエラー: {str(e)}")
+                st.write(f"_imagesの型: {type(ws._images)}")
         
         # 3. チャートオブジェクトの検出
         st.write("3. チャートオブジェクトの検索...")
