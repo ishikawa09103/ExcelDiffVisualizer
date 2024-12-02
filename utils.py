@@ -209,6 +209,11 @@ def export_comparison(comparison_result, sheet1_name=None, sheet2_name=None):
         
         summary_df = pd.DataFrame(summary_data)
         if not summary_df.empty:
+            # シート名でソート可能にするために列の順序を調整
+            columns_order = ['シート名', '変更タイプ', 'セル位置', 'セル位置 (変更前)', 'セル位置 (変更後)', '値', '変更前の値', '変更後の値']
+            existing_columns = [col for col in columns_order if col in summary_df.columns]
+            other_columns = [col for col in summary_df.columns if col not in columns_order]
+            summary_df = summary_df[existing_columns + other_columns]
             summary_df.to_excel(writer, sheet_name='Data_Summary', index=False)
         
         # Write shape differences

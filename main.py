@@ -99,6 +99,7 @@ def main():
                     cell_ref_old = utils.get_excel_cell_reference(col_idx, diff['row_index_old'])
                     cell_ref_new = utils.get_excel_cell_reference(col_idx, diff['row_index_new'])
                     summary_data.append({
+                        'シート名': f"{sheet1} → {sheet2}",
                         '変更タイプ': 'データ変更',
                         'セル位置 (変更前)': cell_ref_old,
                         'セル位置 (変更後)': cell_ref_new,
@@ -114,7 +115,9 @@ def main():
                         if pd.notna(val):
                             row_values.append(f"{col}: {val}")
                     
+                    current_sheet = sheet2 if diff['type'] == 'added' else sheet1
                     summary_data.append({
+                        'シート名': current_sheet,
                         '変更タイプ': 'データ追加' if diff['type'] == 'added' else 'データ削除',
                         'セル位置': f"{row_idx + 1}行目 ({range_ref})",
                         '値': ' | '.join(row_values)
@@ -144,6 +147,7 @@ def main():
                             shape.get('height')
                         )
                         summary_data.append({
+                            'シート名': sheet2,
                             '変更タイプ': '画像追加',
                             'セル位置': cell_ref,
                             '値': size_info
@@ -160,6 +164,7 @@ def main():
                             shape.get('height')
                         )
                         summary_data.append({
+                            'シート名': sheet1,
                             '変更タイプ': '画像削除',
                             'セル位置': cell_ref,
                             '値': size_info
@@ -187,6 +192,7 @@ def main():
                         )
                         
                         summary_data.append({
+                            'シート名': f"{sheet1} → {sheet2}",
                             '変更タイプ': '画像変更',
                             'セル位置 (変更前)': cell_ref_old,
                             'セル位置 (変更後)': cell_ref_new,
