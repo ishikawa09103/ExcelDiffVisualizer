@@ -74,37 +74,75 @@ def extract_shape_info(wb, sheet_name):
 
         # Method 3: 図形（シェイプ）の検出
         st.write("図形（シェイプ）オブジェクトの検索...")
-        shapes = []
 
-        # _drawing.shapesから図形を検出
-        if hasattr(ws, '_drawing') and hasattr(ws._drawing, 'shapes'):
-            shapes.extend(ws._drawing.shapes)
-        # 直接のshapesプロパティから図形を検出
+        # 全ての可能な図形コンテナを確認
+        shape_containers = []
+
+        # 1. _drawingから図形を検出
+        if hasattr(ws, '_drawing'):
+            st.write("_drawingから図形を検索中...")
+            # _shapesプロパティを確認
+            if hasattr(ws._drawing, '_shapes'):
+                st.write("_shapes検出")
+                shape_containers.extend(ws._drawing._shapes)
+            # shapesプロパティを確認
+            if hasattr(ws._drawing, 'shapes'):
+                st.write("shapes検出")
+                shape_containers.extend(ws._drawing.shapes)
+
+        # 2. 直接のshapesプロパティを確認
         if hasattr(ws, 'shapes'):
-            shapes.extend(ws.shapes)
+            st.write("ワークシートの直接のshapesを検索中...")
+            shape_containers.extend(ws.shapes)
 
-        for shape in shapes:
+        # 3. _chartsプロパティを確認（図形が含まれる可能性がある）
+        if hasattr(ws, '_charts'):
+            st.write("_chartsから図形を検索中...")
+            shape_containers.extend(ws._charts)
+
+        st.write(f"検出された図形コンテナの数: {len(shape_containers)}")
+
+        for shape in shape_containers:
             try:
-                st.write(f"図形オブジェクトを検出: {shape}")
-                shape_type = getattr(shape, 'type', None) or getattr(shape, '_type', 'unknown')
+                st.write(f"図形オブジェクトを処理中: {shape}")
+                st.write(f"図形のタイプ: {type(shape)}")
+                st.write(f"図形の属性: {dir(shape)}")
+
+                # 図形の種類を決定
+                shape_type = None
+                if hasattr(shape, 'type'):
+                    shape_type = shape.type
+                elif hasattr(shape, '_type'):
+                    shape_type = shape._type
+                elif hasattr(shape, 'shape_type'):
+                    shape_type = shape.shape_type
+                else:
+                    shape_type = str(type(shape).__name__)
+
                 st.write(f"検出された図形の種類: {shape_type}")
-                
-                # 図形の位置情報を取得
-                anchor = getattr(shape, 'anchor', None)
-                if anchor:
-                    st.write(f"図形の位置: セル {getattr(anchor, 'col', 0)}, {getattr(anchor, 'row', 0)}")
+
+                # 位置情報の取得
+                x, y = 0, 0
+                if hasattr(shape, 'anchor'):
+                    anchor = shape.anchor
                     x = getattr(anchor, 'col', 0)
                     y = getattr(anchor, 'row', 0)
-                else:
-                    x = getattr(shape, 'col', 0)
-                    y = getattr(shape, 'row', 0)
-                    st.write(f"図形の位置: セル {x}, {y}")
-                
-                # サイズ情報を取得
+                    st.write(f"アンカー位置: ({x}, {y})")
+                elif hasattr(shape, '_anchor'):
+                    anchor = shape._anchor
+                    x = getattr(anchor, 'col', 0)
+                    y = getattr(anchor, 'row', 0)
+                    st.write(f"_アンカー位置: ({x}, {y})")
+                elif hasattr(shape, 'coordinate'):
+                    x, y = shape.coordinate
+                    st.write(f"座標位置: ({x}, {y})")
+
+                # サイズ情報の取得
                 width = getattr(shape, 'width', None)
                 height = getattr(shape, 'height', None)
-                st.write(f"図形のサイズ: 幅 {width}, 高さ {height}")
-                
+                if width is not None and height is not None:
+                    st.write(f"図形のサイズ: 幅 {width}, 高さ {height}")
+
                 shapes_info.append({
                     'type': 'shape',
                     'shape_type': shape_type,
@@ -114,8 +152,11 @@ def extract_shape_info(wb, sheet_name):
                     'height': height,
                     'text': getattr(shape, 'text', '')
                 })
+                st.write("図形情報を追加しました")
+
             except Exception as e:
                 st.warning(f"図形の処理中にエラー: {str(e)}")
+                st.write(f"エラーの詳細: {type(e).__name__}")
                 continue
                     
     except Exception as e:
