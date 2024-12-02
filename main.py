@@ -34,12 +34,8 @@ def main():
             df1 = pd.read_excel(file1)
             df2 = pd.read_excel(file2)
             
-            # Reset file pointers for shape comparison
-            file1.seek(0)
-            file2.seek(0)
-            
-            # Compare dataframes and shapes
-            comparison_result = comparison.compare_dataframes(df1, df2, file1, file2)
+            # Compare dataframes
+            comparison_result = comparison.compare_dataframes(df1, df2)
             
             # Display comparison results
             st.subheader("Data Comparison")
@@ -53,11 +49,6 @@ def main():
             with col2:
                 st.markdown("### File 2")
                 grid2 = utils.create_grid(comparison_result['df2'], comparison_result['df2_styles'])
-            
-            # Display shape differences
-            if comparison_result.get('shape_differences'):
-                st.markdown("---")
-                utils.display_shape_differences(comparison_result['shape_differences'])
             
             # Export options
             st.markdown("---")
@@ -73,9 +64,9 @@ def main():
     # Add legend
     st.sidebar.markdown("### Legend")
     st.sidebar.markdown("""
-    - 🟢 Added cells/shapes (Green)
-    - 🔴 Deleted cells/shapes (Red)
-    - 🟡 Modified cells/shapes (Yellow)
+    - 🟢 Added cells (Green)
+    - 🔴 Deleted cells (Red)
+    - 🟡 Modified cells (Yellow)
     """)
 
 if __name__ == "__main__":
