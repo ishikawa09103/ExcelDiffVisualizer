@@ -126,7 +126,7 @@ def compare_shapes(shapes1, shapes2):
 def compare_dataframes(df1, df2):
     """
     Compare two dataframes and return DataFrames with style information for AgGrid
-    using an improved cell change detection algorithm
+    using an intelligent row matching algorithm
     """
     # Create copies for styling
     df1_result = df1.copy()
@@ -140,52 +140,75 @@ def compare_dataframes(df1, df2):
     # Compare common columns
     common_cols = list(set(df1.columns) & set(df2.columns))
     
-    # Create key for row matching (concatenate values of all columns)
-    def create_row_key(row):
-        return '||'.join(str(row[col]) if pd.notna(row[col]) else '' for col in common_cols)
+    # Create a fingerprint for each row
+    def create_row_fingerprint(row):
+        # Convert all values to strings and handle NaN
+        values = [str(row[col]) if pd.notna(row[col]) else '' for col in common_cols]
+        # Join with a special separator that's unlikely to appear in the data
+        return '|||'.join(values)
     
-    # Create dictionaries for quick lookup
-    df1_dict = {create_row_key(row): (idx, row) for idx, row in df1.iterrows()}
-    df2_dict = {create_row_key(row): (idx, row) for idx, row in df2.iterrows()}
+    # Create fingerprints for both dataframes
+    df1_fingerprints = df1.apply(create_row_fingerprint, axis=1)
+    df2_fingerprints = df2.apply(create_row_fingerprint, axis=1)
     
-    # Track processed rows
-    processed_keys_df1 = set()
-    processed_keys_df2 = set()
+    # Create indices for quick lookup
+    df1_index = {fp: idx for idx, fp in enumerate(df1_fingerprints)}
+    df2_index = {fp: idx for idx, fp in enumerate(df2_fingerprints)}
     
-    # Function to find best matching row
-    def find_best_match(row_key, source_dict, target_dict):
-        if row_key in target_dict:
-            return row_key, 1.0
-        
-        max_similarity = 0
-        best_key = None
-        source_parts = set(row_key.split('||'))
-        
-        for target_key in target_dict.keys():
-            target_parts = set(target_key.split('||'))
-            similarity = len(source_parts & target_parts) / len(source_parts | target_parts)
-            if similarity > max_similarity and similarity >= 0.7:  # 70% similarity threshold
-                max_similarity = similarity
-                best_key = target_key
-        
-        return best_key, max_similarity
-
-    # First pass: Find and mark modified cells
-    for key1, (idx1, row1) in df1_dict.items():
-        if key1 in processed_keys_df1:
+    # Track matched rows
+    matched_rows_df1 = set()
+    matched_rows_df2 = set()
+    
+    # Function to calculate similarity between two rows
+    def calculate_row_similarity(row1, row2):
+        matches = 0
+        total = 0
+        for col in common_cols:
+            val1, val2 = row1[col], row2[col]
+            if pd.notna(val1) and pd.notna(val2):
+                total += 1
+                if str(val1).strip() == str(val2).strip():
+                    matches += 1
+        return matches / total if total > 0 else 0
+    
+    # First pass: Find exact matches
+    for idx1, fingerprint1 in enumerate(df1_fingerprints):
+        if fingerprint1 in df2_index:
+            idx2 = df2_index[fingerprint1]
+            matched_rows_df1.add(idx1)
+            matched_rows_df2.add(idx2)
+    
+    # Second pass: Find similar rows for unmatched rows
+    SIMILARITY_THRESHOLD = 0.8
+    
+    for idx1 in range(len(df1)):
+        if idx1 in matched_rows_df1:
             continue
-            
-        best_key2, similarity = find_best_match(key1, df1_dict, df2_dict)
         
-        if best_key2:
-            idx2, row2 = df2_dict[best_key2]
-            processed_keys_df1.add(key1)
-            processed_keys_df2.add(best_key2)
+        row1 = df1.iloc[idx1]
+        best_match_idx = None
+        best_similarity = SIMILARITY_THRESHOLD
+        
+        for idx2 in range(len(df2)):
+            if idx2 in matched_rows_df2:
+                continue
+            
+            row2 = df2.iloc[idx2]
+            similarity = calculate_row_similarity(row1, row2)
+            
+            if similarity > best_similarity:
+                best_similarity = similarity
+                best_match_idx = idx2
+        
+        if best_match_idx is not None:
+            matched_rows_df1.add(idx1)
+            matched_rows_df2.add(best_match_idx)
             
             # Check for modifications in matched rows
+            row2 = df2.iloc[best_match_idx]
             for col in common_cols:
                 val1, val2 = row1[col], row2[col]
-                if pd.notna(val1) and pd.notna(val2) and val1 != val2:
+                if pd.notna(val1) and pd.notna(val2) and str(val1).strip() != str(val2).strip():
                     df1_styles.append({
                         'field': col,
                         'rowIndex': idx1,
@@ -193,24 +216,25 @@ def compare_dataframes(df1, df2):
                     })
                     df2_styles.append({
                         'field': col,
-                        'rowIndex': idx2,
+                        'rowIndex': best_match_idx,
                         'cellClass': 'ag-cell-modified'
                     })
                     differences.append({
                         'type': 'modified',
                         'column': col,
                         'row_index_old': idx1,
-                        'row_index_new': idx2,
+                        'row_index_new': best_match_idx,
                         'value_old': val1,
                         'value_new': val2,
-                        'similarity': similarity
+                        'similarity': best_similarity
                     })
     
-    # Second pass: Mark remaining rows as added/deleted
-    for key1, (idx1, row1) in df1_dict.items():
-        if key1 not in processed_keys_df1:
+    # Mark remaining unmatched rows
+    for idx1 in range(len(df1)):
+        if idx1 not in matched_rows_df1:
+            row = df1.iloc[idx1]
             for col in common_cols:
-                if pd.notna(row1[col]):
+                if pd.notna(row[col]):
                     df1_styles.append({
                         'field': col,
                         'rowIndex': idx1,
@@ -219,13 +243,14 @@ def compare_dataframes(df1, df2):
             differences.append({
                 'type': 'deleted',
                 'row_index': idx1,
-                'values': row1[common_cols].to_dict()
+                'values': row[common_cols].to_dict()
             })
     
-    for key2, (idx2, row2) in df2_dict.items():
-        if key2 not in processed_keys_df2:
+    for idx2 in range(len(df2)):
+        if idx2 not in matched_rows_df2:
+            row = df2.iloc[idx2]
             for col in common_cols:
-                if pd.notna(row2[col]):
+                if pd.notna(row[col]):
                     df2_styles.append({
                         'field': col,
                         'rowIndex': idx2,
@@ -234,7 +259,7 @@ def compare_dataframes(df1, df2):
             differences.append({
                 'type': 'added',
                 'row_index': idx2,
-                'values': row2[common_cols].to_dict()
+                'values': row[common_cols].to_dict()
             })
     
     # Create difference summary
