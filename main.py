@@ -76,9 +76,46 @@ def main():
                 st.subheader("Shape Differences")
                 utils.display_shape_differences(shape_differences)
             
+            # Display comparison summary
+            st.subheader("比較結果サマリー")
+
+            # Create summary DataFrame
+            summary_data = []
+            for diff in comparison_result['diff_summary'].to_dict('records'):
+                if diff['type'] == 'modified':
+                    summary_data.append({
+                        '変更タイプ': '変更',
+                        '列': diff['column'],
+                        '行 (変更前)': diff['row_index_old'],
+                        '行 (変更後)': diff['row_index_new'],
+                        '変更前の値': diff['value_old'],
+                        '変更後の値': diff['value_new']
+                    })
+                else:
+                    values = diff['values']
+                    for col, val in values.items():
+                        summary_data.append({
+                            '変更タイプ': '追加' if diff['type'] == 'added' else '削除',
+                            '列': col,
+                            '行': diff['row_index'],
+                            '値': val
+                        })
+
+            if summary_data:
+                summary_df = pd.DataFrame(summary_data)
+                st.dataframe(
+                    summary_df.style.apply(lambda x: ['background-color: #FFF3CD' if v == '変更'
+                                                    else 'background-color: #D4EDDA' if v == '追加'
+                                                    else 'background-color: #F8D7DA' if v == '削除'
+                                                    else '' for v in x],
+                                         subset=['変更タイプ'])
+                )
+            else:
+                st.info("差分は検出されませんでした")
+
             # Export options
             st.markdown("---")
-            st.subheader("Export Results")
+            st.subheader("エクスポート")
             utils.export_comparison(comparison_result)
             
         except Exception as e:
