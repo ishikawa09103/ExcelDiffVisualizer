@@ -38,6 +38,12 @@ def main():
             # Get sheet names
             sheets1 = wb1.sheetnames
             sheets2 = wb2.sheetnames
+
+            # シート情報のデバッグ出力を追加
+            st.write(f"ファイル1のシート数: {len(sheets1)}")
+            st.write(f"ファイル1のシート名: {', '.join(sheets1)}")
+            st.write(f"ファイル2のシート数: {len(sheets2)}")
+            st.write(f"ファイル2のシート名: {', '.join(sheets2)}")
             
             # Sheet selection
             col1, col2 = st.columns(2)
