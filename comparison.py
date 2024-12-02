@@ -151,27 +151,44 @@ def compare_dataframes(df1, df2):
         """Create a hash value for row matching based on key columns"""
         values = []
         for col in key_columns:
-            val = row[col]
-            # Handle different data types appropriately
-            if pd.isna(val):
+            try:
+                val = row[col]
+                # Handle different data types appropriately
+                if pd.isna(val) or val is None:
+                    values.append('')
+                    continue
+
+                # Handle numeric types
+                if pd.api.types.is_numeric_dtype(type(val)):
+                    try:
+                        if isinstance(val, (int, np.integer)):
+                            values.append(str(int(val)))
+                        elif isinstance(val, float):
+                            if val.is_integer():
+                                values.append(str(int(val)))
+                            else:
+                                values.append(f"{val:.6f}".rstrip('0').rstrip('.'))
+                        else:
+                            values.append(str(val))
+                    except (AttributeError, ValueError, TypeError) as e:
+                        values.append(str(val))
+                # Handle string and other types
+                else:
+                    clean_val = str(val).strip() if val is not None else ''
+                    values.append(clean_val)
+            except Exception as e:
                 values.append('')
-            elif pd.api.types.is_numeric_dtype(type(val)):
-                try:
-                    if pd.isna(val):
-                        values.append('')
-                    elif np.issubdtype(type(val), np.integer) or (isinstance(val, float) and val.is_integer()):
-                        values.append(str(int(val)))
-                    else:
-                        values.append(str(float(val)))
-                except (AttributeError, ValueError):
-                    values.append(str(val))
-            else:
-                values.append(str(val).strip())
+                continue
         return '||'.join(values)
     
-    # Create hash values for both dataframes
-    df1['_row_hash'] = df1.apply(create_row_hash, axis=1)
-    df2['_row_hash'] = df2.apply(create_row_hash, axis=1)
+    # Create hash values for both dataframes with error handling
+    try:
+        df1['_row_hash'] = df1.apply(create_row_hash, axis=1)
+        df2['_row_hash'] = df2.apply(create_row_hash, axis=1)
+    except Exception as e:
+        # エラーが発生した場合は、インデックスをハッシュとして使用
+        df1['_row_hash'] = df1.index.astype(str)
+        df2['_row_hash'] = df2.index.astype(str)
     
     # Initialize tracking sets
     matched_df1_indices = set()
@@ -317,8 +334,10 @@ def compare_dataframes(df1, df2):
             })
     
     # Remove temporary hash columns
-    df1_result.drop('_row_hash', axis=1, inplace=True)
-    df2_result.drop('_row_hash', axis=1, inplace=True)
+    if '_row_hash' in df1_result.columns:
+        df1_result.drop('_row_hash', axis=1, inplace=True)
+    if '_row_hash' in df2_result.columns:
+        df2_result.drop('_row_hash', axis=1, inplace=True)
     
     # Create difference summary
     diff_summary = pd.DataFrame(differences)
