@@ -118,33 +118,57 @@ def main():
                 if diff['type'] == 'added':
                     shape = diff['shape']
                     if shape['type'] == 'image':
-                        cell_ref = utils.get_excel_cell_reference(shape['x'], shape['y'])
+                        cell_ref = utils.get_excel_cell_reference(shape.get('x', 0), shape.get('y', 0))
+                        width = shape.get('width', 0)
+                        height = shape.get('height', 0)
+                        size_info = "サイズ情報なし"
+                        if width is not None and height is not None:
+                            size_info = f"サイズ: 幅 {width:.1f}px, 高さ {height:.1f}px"
                         summary_data.append({
                             '変更タイプ': '画像追加',
                             'セル位置': cell_ref,
-                            '値': f"サイズ: 幅 {shape['width']:.1f}px, 高さ {shape['height']:.1f}px"
+                            '値': size_info
                         })
                 elif diff['type'] == 'deleted':
                     shape = diff['shape']
                     if shape['type'] == 'image':
-                        cell_ref = utils.get_excel_cell_reference(shape['x'], shape['y'])
+                        cell_ref = utils.get_excel_cell_reference(shape.get('x', 0), shape.get('y', 0))
+                        width = shape.get('width', 0)
+                        height = shape.get('height', 0)
+                        size_info = "サイズ情報なし"
+                        if width is not None and height is not None:
+                            size_info = f"サイズ: 幅 {width:.1f}px, 高さ {height:.1f}px"
                         summary_data.append({
                             '変更タイプ': '画像削除',
                             'セル位置': cell_ref,
-                            '値': f"サイズ: 幅 {shape['width']:.1f}px, 高さ {shape['height']:.1f}px"
+                            '値': size_info
                         })
                 else:  # modified
                     old_shape = diff['old_shape']
                     new_shape = diff['new_shape']
                     if old_shape['type'] == 'image' and new_shape['type'] == 'image':
-                        cell_ref_old = utils.get_excel_cell_reference(old_shape['x'], old_shape['y'])
-                        cell_ref_new = utils.get_excel_cell_reference(new_shape['x'], new_shape['y'])
+                        cell_ref_old = utils.get_excel_cell_reference(old_shape.get('x', 0), old_shape.get('y', 0))
+                        cell_ref_new = utils.get_excel_cell_reference(new_shape.get('x', 0), new_shape.get('y', 0))
+                        
+                        old_width = old_shape.get('width', 0)
+                        old_height = old_shape.get('height', 0)
+                        new_width = new_shape.get('width', 0)
+                        new_height = new_shape.get('height', 0)
+                        
+                        old_size_info = "サイズ情報なし"
+                        new_size_info = "サイズ情報なし"
+                        
+                        if old_width is not None and old_height is not None:
+                            old_size_info = f"サイズ: 幅 {old_width:.1f}px, 高さ {old_height:.1f}px"
+                        if new_width is not None and new_height is not None:
+                            new_size_info = f"サイズ: 幅 {new_width:.1f}px, 高さ {new_height:.1f}px"
+                            
                         summary_data.append({
                             '変更タイプ': '画像変更',
                             'セル位置 (変更前)': cell_ref_old,
                             'セル位置 (変更後)': cell_ref_new,
-                            '変更前の値': f"サイズ: 幅 {old_shape['width']:.1f}px, 高さ {old_shape['height']:.1f}px",
-                            '変更後の値': f"サイズ: 幅 {new_shape['width']:.1f}px, 高さ {new_shape['height']:.1f}px"
+                            '変更前の値': old_size_info,
+                            '変更後の値': new_size_info
                         })
 
             if summary_data:
