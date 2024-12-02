@@ -126,6 +126,7 @@ def compare_shapes(shapes1, shapes2):
 def compare_dataframes(df1, df2):
     """
     Compare two dataframes and return DataFrames with style information for AgGrid
+    using an intelligent row matching algorithm to detect actual changes
     """
     # Create copies for styling
     df1_result = df1.copy()
@@ -134,76 +135,108 @@ def compare_dataframes(df1, df2):
     # Initialize style information
     df1_styles = []
     df2_styles = []
+    differences = []
     
     # Compare common columns
     common_cols = list(set(df1.columns) & set(df2.columns))
     
-    # Track differences
-    differences = []
+    # Create a similarity matrix for row matching
+    def calculate_row_similarity(row1, row2):
+        matches = sum(row1[col] == row2[col] for col in common_cols if pd.notna(row1[col]) and pd.notna(row2[col]))
+        total = sum(1 for col in common_cols if pd.notna(row1[col]) and pd.notna(row2[col]))
+        return matches / total if total > 0 else 0
+
+    # Track matched rows to avoid duplicate matches
+    matched_rows_df1 = set()
+    matched_rows_df2 = set()
     
-    # Compare values in common columns
-    for col in common_cols:
-        # Get maximum length
-        max_len = max(len(df1), len(df2))
-        
-        # Pad shorter dataframe with NaN
-        s1 = df1[col].reindex(range(max_len))
-        s2 = df2[col].reindex(range(max_len))
-        
-        # Compare values
-        for idx in range(max_len):
-            val1 = s1.iloc[idx] if idx < len(df1) else np.nan
-            val2 = s2.iloc[idx] if idx < len(df2) else np.nan
+    # Find matches using similarity threshold
+    SIMILARITY_THRESHOLD = 0.8
+    
+    # First pass: Find exact matches
+    for idx1 in range(len(df1)):
+        if idx1 in matched_rows_df1:
+            continue
             
-            if pd.isna(val1) and not pd.isna(val2):
-                # Added in df2
-                if idx < len(df2):
-                    df2_styles.append({
-                        'field': col,
-                        'rowIndex': idx,
-                        'cellClass': 'ag-cell-added'
-                    })
-                    differences.append({
-                        'type': 'added',
-                        'column': col,
-                        'row': idx,
-                        'value': val2
-                    })
-            elif not pd.isna(val1) and pd.isna(val2):
-                # Deleted in df2
-                if idx < len(df1):
+        row1 = df1.iloc[idx1]
+        best_match_idx = None
+        best_match_score = 0
+        
+        for idx2 in range(len(df2)):
+            if idx2 in matched_rows_df2:
+                continue
+                
+            row2 = df2.iloc[idx2]
+            similarity = calculate_row_similarity(row1, row2)
+            
+            if similarity == 1.0:  # Exact match
+                matched_rows_df1.add(idx1)
+                matched_rows_df2.add(idx2)
+                break
+            elif similarity > best_match_score:
+                best_match_score = similarity
+                best_match_idx = idx2
+        
+        # If no exact match but good similarity, mark as modified
+        if best_match_score >= SIMILARITY_THRESHOLD and best_match_idx is not None:
+            matched_rows_df1.add(idx1)
+            matched_rows_df2.add(best_match_idx)
+            
+            # Check for modifications in matched rows
+            row2 = df2.iloc[best_match_idx]
+            for col in common_cols:
+                val1, val2 = row1[col], row2[col]
+                if pd.notna(val1) and pd.notna(val2) and val1 != val2:
                     df1_styles.append({
                         'field': col,
-                        'rowIndex': idx,
+                        'rowIndex': idx1,
+                        'cellClass': 'ag-cell-modified'
+                    })
+                    df2_styles.append({
+                        'field': col,
+                        'rowIndex': best_match_idx,
+                        'cellClass': 'ag-cell-modified'
+                    })
+                    differences.append({
+                        'type': 'modified',
+                        'column': col,
+                        'row': idx1,
+                        'value_old': val1,
+                        'value_new': val2
+                    })
+    
+    # Mark unmatched rows as added/deleted
+    for idx1 in range(len(df1)):
+        if idx1 not in matched_rows_df1:
+            row = df1.iloc[idx1]
+            for col in common_cols:
+                if pd.notna(row[col]):
+                    df1_styles.append({
+                        'field': col,
+                        'rowIndex': idx1,
                         'cellClass': 'ag-cell-deleted'
                     })
-                    differences.append({
-                        'type': 'deleted',
-                        'column': col,
-                        'row': idx,
-                        'value': val1
-                    })
-            elif not pd.isna(val1) and not pd.isna(val2) and val1 != val2:
-                # Modified
-                if idx < len(df1):
-                    df1_styles.append({
-                        'field': col,
-                        'rowIndex': idx,
-                        'cellClass': 'ag-cell-modified'
-                    })
-                if idx < len(df2):
+            differences.append({
+                'type': 'deleted',
+                'row': idx1,
+                'values': row[common_cols].to_dict()
+            })
+    
+    for idx2 in range(len(df2)):
+        if idx2 not in matched_rows_df2:
+            row = df2.iloc[idx2]
+            for col in common_cols:
+                if pd.notna(row[col]):
                     df2_styles.append({
                         'field': col,
-                        'rowIndex': idx,
-                        'cellClass': 'ag-cell-modified'
+                        'rowIndex': idx2,
+                        'cellClass': 'ag-cell-added'
                     })
-                differences.append({
-                    'type': 'modified',
-                    'column': col,
-                    'row': idx,
-                    'value_old': val1,
-                    'value_new': val2
-                })
+            differences.append({
+                'type': 'added',
+                'row': idx2,
+                'values': row[common_cols].to_dict()
+            })
     
     # Create difference summary
     diff_summary = pd.DataFrame(differences)
