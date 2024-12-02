@@ -7,15 +7,24 @@ from openpyxl.drawing.image import Image
 from openpyxl.drawing.xdr import XDRPoint2D, XDRPositiveSize2D
 
 def extract_shape_info(wb, sheet_name):
+    st.write("図形情報の抽出を開始...")
+    st.write(f"ワークシート名: {sheet_name}")
+    
     shapes_info = []
     ws = wb[sheet_name]
     
     try:
         # Method 1: _drawing.drawingsから画像を取得
+        st.write("描画オブジェクトの検索...")
         if hasattr(ws, '_drawing') and ws._drawing:
             for shape in ws._drawing.drawings:
                 try:
                     if hasattr(shape, '_rel') and shape._rel.target:
+                        # 図形の情報をデバッグ出力
+                        st.write(f"検出された図形の種類: {shape._type if hasattr(shape, '_type') else 'unknown'}")
+                        st.write(f"図形の位置: セル {getattr(shape, 'col', 0)}, {getattr(shape, 'row', 0)}")
+                        st.write(f"図形のサイズ: 幅 {getattr(shape, 'width', 'N/A')}, 高さ {getattr(shape, 'height', 'N/A')}")
+                        
                         # 画像情報を取得
                         x = getattr(shape, 'col', 0) or 0
                         y = getattr(shape, 'row', 0) or 0
@@ -35,11 +44,17 @@ def extract_shape_info(wb, sheet_name):
                     continue
         
         # Method 2: _imagesから画像を取得
+        st.write("埋め込み画像オブジェクトの検索...")
         if hasattr(ws, '_images'):
             for img in ws._images:
                 try:
                     anchor = getattr(img, 'anchor', None)
                     if anchor:
+                        # 図形の情報をデバッグ出力
+                        st.write(f"検出された図形の種類: image")
+                        st.write(f"図形の位置: セル {getattr(anchor, 'col', 0)}, {getattr(anchor, 'row', 0)}")
+                        st.write(f"図形のサイズ: 幅 {getattr(anchor, 'width', 'N/A')}, 高さ {getattr(anchor, 'height', 'N/A')}")
+                        
                         x = getattr(anchor, 'col', 0) or 0
                         y = getattr(anchor, 'row', 0) or 0
                         width = getattr(anchor, 'width', None)
@@ -60,7 +75,16 @@ def extract_shape_info(wb, sheet_name):
     except Exception as e:
         st.warning(f"ワークシートの処理中にエラー: {str(e)}")
     
-    st.write(f"検出された画像数: {len(shapes_info)}")
+    # 図形の合計数と種類別集計を表示
+    st.write(f"検出された図形の合計数: {len(shapes_info)}")
+    st.write("図形の種類別集計:")
+    shape_types = {}
+    for shape in shapes_info:
+        shape_type = shape.get('type', 'unknown')
+        shape_types[shape_type] = shape_types.get(shape_type, 0) + 1
+    for shape_type, count in shape_types.items():
+        st.write(f"- {shape_type}: {count}個")
+    
     return shapes_info
 
 def compare_shapes(shapes1, shapes2):
