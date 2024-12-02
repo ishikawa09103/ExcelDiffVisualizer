@@ -1,0 +1,39 @@
+/* Custom styles for the Excel comparison tool */
+.comparison-container {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.file-container {
+    flex: 1;
+    padding: 1rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #fff;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.legend-color {
+    width: 16px;
+    height: 16px;
+    margin-right: 0.5rem;
+    border-radius: 3px;
+}
+
+.added { background-color: #D4EDDA; }
+.deleted { background-color: #F8D7DA; }
+.modified { background-color: #FFF3CD; }
+
+.ag-theme-streamlit .ag-row-hover { 
+    background-color: rgba(0,0,0,0.1) !important;
+}
+
+.ag-theme-streamlit .ag-row-selected { 
+    background-color: rgba(0,0,0,0.2) !important;
+}
