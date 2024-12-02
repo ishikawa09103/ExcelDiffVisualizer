@@ -9,21 +9,30 @@ def extract_shape_info(workbook, sheet_name):
     sheet = workbook[sheet_name]
     shapes = []
     
-    for shape in sheet._shapes:
-        shape_info = {
-            'type': type(shape).__name__,
-            'name': shape.name if hasattr(shape, 'name') else '',
-            'x': shape.anchor._from.x if isinstance(shape.anchor, AbsoluteAnchor) else shape.anchor.from_.x,
-            'y': shape.anchor._from.y if isinstance(shape.anchor, AbsoluteAnchor) else shape.anchor.from_.y,
-            'width': shape.width if hasattr(shape, 'width') else 0,
-            'height': shape.height if hasattr(shape, 'height') else 0,
-            'text': shape.text if hasattr(shape, 'text') else '',
-            'format': {
-                'fill': shape.fill.type if hasattr(shape, 'fill') else None,
-                'line': shape.line.type if hasattr(shape, 'line') else None,
-            }
-        }
-        shapes.append(shape_info)
+    try:
+        # Use _drawings instead of _shapes
+        for drawing in sheet._drawings:
+            for shape in drawing.shapes:
+                try:
+                    shape_info = {
+                        'type': shape.shape_type if hasattr(shape, 'shape_type') else type(shape).__name__,
+                        'name': shape.name if hasattr(shape, 'name') else '',
+                        'description': shape.description if hasattr(shape, 'description') else '',
+                        'coordinates': {
+                            'x': shape.left if hasattr(shape, 'left') else 0,
+                            'y': shape.top if hasattr(shape, 'top') else 0,
+                            'width': shape.width if hasattr(shape, 'width') else 0,
+                            'height': shape.height if hasattr(shape, 'height') else 0
+                        }
+                    }
+                    shapes.append(shape_info)
+                except Exception as e:
+                    print(f"Warning: Error processing shape: {str(e)}")
+                    continue
+    except AttributeError:
+        print(f"Info: No shapes found in sheet '{sheet_name}'")
+    except Exception as e:
+        print(f"Error: Failed to process shapes in sheet '{sheet_name}': {str(e)}")
     
     return shapes
 
@@ -47,20 +56,20 @@ def compare_shapes(shapes1, shapes2):
             shape1 = shapes1_dict[name]
             differences = {}
             
-            # Compare attributes
-            for attr in ['x', 'y', 'width', 'height', 'text']:
+            # Compare coordinates
+            for coord in ['x', 'y', 'width', 'height']:
+                if shape1['coordinates'][coord] != shape2['coordinates'][coord]:
+                    differences[coord] = {
+                        'old': shape1['coordinates'][coord],
+                        'new': shape2['coordinates'][coord]
+                    }
+            
+            # Compare other attributes
+            for attr in ['type', 'description']:
                 if shape1[attr] != shape2[attr]:
                     differences[attr] = {
                         'old': shape1[attr],
                         'new': shape2[attr]
-                    }
-            
-            # Compare format
-            for format_attr in ['fill', 'line']:
-                if shape1['format'][format_attr] != shape2['format'][format_attr]:
-                    differences[f'format_{format_attr}'] = {
-                        'old': shape1['format'][format_attr],
-                        'new': shape2['format'][format_attr]
                     }
             
             if differences:
@@ -98,6 +107,7 @@ def compare_dataframes(df1, df2, file1=None, file2=None):
             shapes2 = extract_shape_info(wb2, wb2.sheetnames[0])
             
             shape_differences = compare_shapes(shapes1, shapes2)
+            print(f"Debug: Found {len(shapes1)} shapes in file1 and {len(shapes2)} shapes in file2")
         except Exception as e:
             print(f"Error comparing shapes: {str(e)}")
     
