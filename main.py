@@ -123,7 +123,10 @@ def main():
                         height = shape.get('height', 0)
                         size_info = "サイズ情報なし"
                         if width is not None and height is not None:
-                            size_info = f"サイズ: 幅 {width:.1f}px, 高さ {height:.1f}px"
+                            try:
+                                size_info = f"サイズ: 幅 {float(width):.1f}px, 高さ {float(height):.1f}px"
+                            except (TypeError, ValueError):
+                                size_info = "サイズ情報なし"
                         summary_data.append({
                             '変更タイプ': '画像追加',
                             'セル位置': cell_ref,
@@ -137,7 +140,10 @@ def main():
                         height = shape.get('height', 0)
                         size_info = "サイズ情報なし"
                         if width is not None and height is not None:
-                            size_info = f"サイズ: 幅 {width:.1f}px, 高さ {height:.1f}px"
+                            try:
+                                size_info = f"サイズ: 幅 {float(width):.1f}px, 高さ {float(height):.1f}px"
+                            except (TypeError, ValueError):
+                                size_info = "サイズ情報なし"
                         summary_data.append({
                             '変更タイプ': '画像削除',
                             'セル位置': cell_ref,
@@ -159,9 +165,15 @@ def main():
                         new_size_info = "サイズ情報なし"
                         
                         if old_width is not None and old_height is not None:
-                            old_size_info = f"サイズ: 幅 {old_width:.1f}px, 高さ {old_height:.1f}px"
+                            try:
+                                old_size_info = f"サイズ: 幅 {float(old_width):.1f}px, 高さ {float(old_height):.1f}px"
+                            except (TypeError, ValueError):
+                                old_size_info = "サイズ情報なし"
                         if new_width is not None and new_height is not None:
-                            new_size_info = f"サイズ: 幅 {new_width:.1f}px, 高さ {new_height:.1f}px"
+                            try:
+                                new_size_info = f"サイズ: 幅 {float(new_width):.1f}px, 高さ {float(new_height):.1f}px"
+                            except (TypeError, ValueError):
+                                new_size_info = "サイズ情報なし"
                             
                         summary_data.append({
                             '変更タイプ': '画像変更',
