@@ -87,23 +87,23 @@ def export_comparison(comparison_result):
         for diff in comparison_result['diff_summary'].to_dict('records'):
             if diff['type'] == 'modified':
                 summary_data.append({
-                    'Change Type': 'Modified',
-                    'Column': diff['column'],
-                    'Row (Old)': diff['row_index_old'],
-                    'Row (New)': diff['row_index_new'],
-                    'Old Value': diff['value_old'],
-                    'New Value': diff['value_new'],
-                    'Similarity': f"{diff.get('similarity', 1.0):.2%}"
+                    '変更タイプ': '変更',
+                    '列': diff['column'],
+                    '行 (変更前)': diff['row_index_old'],
+                    '行 (変更後)': diff['row_index_new'],
+                    '変更前の値': diff['value_old'],
+                    '変更後の値': diff['value_new'],
+                    '類似度': f"{diff.get('similarity', 1.0):.2%}"
                 })
             else:
                 values = diff['values']
                 for col, val in values.items():
                     summary_data.append({
-                        'Change Type': 'Added' if diff['type'] == 'added' else 'Deleted',
-                        'Column': col,
-                        'Row': diff['row_index'],
-                        'Value': val,
-                        'Similarity': 'N/A'
+                        '変更タイプ': '追加' if diff['type'] == 'added' else '削除',
+                        '列': col,
+                        '行': diff['row_index'],
+                        '値': val,
+                        '類似度': 'N/A'
                     })
         
         summary_df = pd.DataFrame(summary_data)
@@ -121,7 +121,7 @@ def export_comparison(comparison_result):
     
     # Create download button
     st.download_button(
-        label="Download Comparison Report",
+        label="比較レポートをダウンロード",
         data=output,
         file_name=f"comparison_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

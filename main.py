@@ -16,18 +16,18 @@ st.set_page_config(
 styles.apply_custom_css()
 
 def main():
-    st.title("Excel File Comparison Tool")
+    st.title("Excel ファイル比較ツール")
     
     # File upload section
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("File 1")
-        file1 = st.file_uploader("Upload first Excel file", type=['xlsx', 'xls'])
+        st.subheader("ファイル 1")
+        file1 = st.file_uploader("1つ目のExcelファイルをアップロード", type=['xlsx', 'xls'])
     
     with col2:
-        st.subheader("File 2")
-        file2 = st.file_uploader("Upload second Excel file", type=['xlsx', 'xls'])
+        st.subheader("ファイル 2")
+        file2 = st.file_uploader("2つ目のExcelファイルをアップロード", type=['xlsx', 'xls'])
 
     if file1 and file2:
         try:
@@ -82,17 +82,17 @@ def main():
             utils.export_comparison(comparison_result)
             
         except Exception as e:
-            st.error(f"Error processing files: {str(e)}")
+            st.error(f"ファイルの処理中にエラーが発生しました: {str(e)}")
     
     else:
-        st.info("Please upload both Excel files to start comparison")
+        st.info("比較を開始するには、両方のExcelファイルをアップロードしてください")
 
     # Add legend
-    st.sidebar.markdown("### Legend")
+    st.sidebar.markdown("### 凡例")
     st.sidebar.markdown("""
-    - 🟢 Added cells/shapes (Green)
-    - 🔴 Deleted cells/shapes (Red)
-    - 🟡 Modified cells/shapes (Yellow)
+    - 🟢 追加されたセル/図形 (緑色)
+    - 🔴 削除されたセル/図形 (赤色)
+    - 🟡 変更されたセル/図形 (黄色)
     """)
 
 if __name__ == "__main__":
