@@ -75,70 +75,92 @@ def display_shape_differences(shape_differences):
     """
     Display shape differences in a formatted way with improved image information
     """
+    st.write("画像の差分処理を開始...")
+    
     for diff in shape_differences:
+        st.write(f"処理中の差分タイプ: {diff['type']}")
+        st.write(f"差分の内容: {diff}")
+        
         if diff['type'] == 'added':
-            shape = diff['shape']
-            st.markdown(f"🟢 **追加された要素:**")
-            if shape['type'] == 'image':
-                st.markdown(f"""
-                - 種類: 画像
-                - 位置: セル {get_excel_cell_reference(shape['x'], shape['y'])}
-                - サイズ: 幅 {shape['width']:.1f}px, 高さ {shape['height']:.1f}px
-                """)
-            else:
-                st.markdown(f"""
-                - 種類: {shape['type']}
-                - 位置: セル {get_excel_cell_reference(shape['x'], shape['y'])}
-                - テキスト: {shape['text'] if shape['text'] else 'なし'}
-                """)
+            shape = diff.get('shape', {})
+            st.write(f"追加された形状の情報: {shape}")
+            if shape.get('type') == 'image':
+                try:
+                    st.markdown(f"🟢 **追加された画像:**")
+                    cell_ref = get_excel_cell_reference(shape.get('x', 0), shape.get('y', 0))
+                    st.write(f"- 位置: セル {cell_ref}")
+                    if shape.get('width') is not None and shape.get('height') is not None:
+                        st.write(f"- サイズ: 幅 {shape['width']:.1f}px, 高さ {shape['height']:.1f}px")
+                    else:
+                        st.write("- サイズ情報なし")
+                except Exception as e:
+                    st.error(f"画像情報の表示中にエラー: {str(e)}")
         elif diff['type'] == 'deleted':
-            shape = diff['shape']
-            st.markdown(f"🔴 **削除された要素:**")
-            if shape['type'] == 'image':
-                st.markdown(f"""
-                - 種類: 画像
-                - 位置: セル {get_excel_cell_reference(shape['x'], shape['y'])}
-                - サイズ: 幅 {shape['width']:.1f}px, 高さ {shape['height']:.1f}px
-                """)
+            shape = diff.get('shape', {})
+            st.write(f"削除された形状の情報: {shape}")
+            if shape.get('type') == 'image':
+                try:
+                    st.markdown(f"🔴 **削除された画像:**")
+                    cell_ref = get_excel_cell_reference(shape.get('x', 0), shape.get('y', 0))
+                    st.write(f"- 位置: セル {cell_ref}")
+                    if shape.get('width') is not None and shape.get('height') is not None:
+                        st.write(f"- サイズ: 幅 {shape['width']:.1f}px, 高さ {shape['height']:.1f}px")
+                    else:
+                        st.write("- サイズ情報なし")
+                except Exception as e:
+                    st.error(f"画像情報の表示中にエラー: {str(e)}")
             else:
                 st.markdown(f"""
-                - 種類: {shape['type']}
-                - 位置: セル {get_excel_cell_reference(shape['x'], shape['y'])}
-                - テキスト: {shape['text'] if shape['text'] else 'なし'}
+                - 種類: {shape.get('type', 'unknown')}
+                - 位置: セル {get_excel_cell_reference(shape.get('x', 0), shape.get('y', 0))}
+                - テキスト: {shape.get('text', '') or 'なし'}
                 """)
         else:  # modified
+            st.write("変更された形状の情報:")
+            old_shape = diff.get('old_shape', {})
+            new_shape = diff.get('new_shape', {})
+            st.write(f"変更前: {old_shape}")
+            st.write(f"変更後: {new_shape}")
+            
             st.markdown(f"🟡 **変更された要素:**")
             col1, col2 = st.columns(2)
             with col1:
-                old_shape = diff['old_shape']
-                st.markdown("**変更前:**")
-                if old_shape['type'] == 'image':
-                    st.markdown(f"""
-                    - 種類: 画像
-                    - 位置: セル {get_excel_cell_reference(old_shape['x'], old_shape['y'])}
-                    - サイズ: 幅 {old_shape['width']:.1f}px, 高さ {old_shape['height']:.1f}px
-                    """)
-                else:
-                    st.markdown(f"""
-                    - 種類: {old_shape['type']}
-                    - 位置: セル {get_excel_cell_reference(old_shape['x'], old_shape['y'])}
-                    - テキスト: {old_shape['text'] if old_shape['text'] else 'なし'}
-                    """)
+                try:
+                    st.markdown("**変更前:**")
+                    if old_shape.get('type') == 'image':
+                        cell_ref = get_excel_cell_reference(old_shape.get('x', 0), old_shape.get('y', 0))
+                        st.write(f"- 位置: セル {cell_ref}")
+                        if old_shape.get('width') is not None and old_shape.get('height') is not None:
+                            st.write(f"- サイズ: 幅 {old_shape['width']:.1f}px, 高さ {old_shape['height']:.1f}px")
+                        else:
+                            st.write("- サイズ情報なし")
+                    else:
+                        st.markdown(f"""
+                        - 種類: {old_shape.get('type', 'unknown')}
+                        - 位置: セル {get_excel_cell_reference(old_shape.get('x', 0), old_shape.get('y', 0))}
+                        - テキスト: {old_shape.get('text', '') or 'なし'}
+                        """)
+                except Exception as e:
+                    st.error(f"変更前の情報表示中にエラー: {str(e)}")
+            
             with col2:
-                new_shape = diff['new_shape']
-                st.markdown("**変更後:**")
-                if new_shape['type'] == 'image':
-                    st.markdown(f"""
-                    - 種類: 画像
-                    - 位置: セル {get_excel_cell_reference(new_shape['x'], new_shape['y'])}
-                    - サイズ: 幅 {new_shape['width']:.1f}px, 高さ {new_shape['height']:.1f}px
-                    """)
-                else:
-                    st.markdown(f"""
-                    - 種類: {new_shape['type']}
-                    - 位置: セル {get_excel_cell_reference(new_shape['x'], new_shape['y'])}
-                    - テキスト: {new_shape['text'] if new_shape['text'] else 'なし'}
-                    """)
+                try:
+                    st.markdown("**変更後:**")
+                    if new_shape.get('type') == 'image':
+                        cell_ref = get_excel_cell_reference(new_shape.get('x', 0), new_shape.get('y', 0))
+                        st.write(f"- 位置: セル {cell_ref}")
+                        if new_shape.get('width') is not None and new_shape.get('height') is not None:
+                            st.write(f"- サイズ: 幅 {new_shape['width']:.1f}px, 高さ {new_shape['height']:.1f}px")
+                        else:
+                            st.write("- サイズ情報なし")
+                    else:
+                        st.markdown(f"""
+                        - 種類: {new_shape.get('type', 'unknown')}
+                        - 位置: セル {get_excel_cell_reference(new_shape.get('x', 0), new_shape.get('y', 0))}
+                        - テキスト: {new_shape.get('text', '') or 'なし'}
+                        """)
+                except Exception as e:
+                    st.error(f"変更後の情報表示中にエラー: {str(e)}")
 
 def export_comparison(comparison_result):
     """
