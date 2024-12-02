@@ -7,23 +7,67 @@ from openpyxl.drawing.xdr import XDRPoint2D, XDRPositiveSize2D
 
 def extract_shape_info(wb, sheet_name):
     """
-    Extract shape information from an Excel worksheet
+    Extract shape information from an Excel worksheet using the latest openpyxl API
     """
     shapes_info = []
     ws = wb[sheet_name]
     
-    for shape in ws._drawings:
-        if isinstance(shape, SpreadsheetDrawing):
-            for anchor in shape.anchors:
-                shape_info = {
-                    'type': type(shape).__name__,
-                    'x': anchor.col,
-                    'y': anchor.row,
-                    'width': getattr(anchor, 'width', None),
-                    'height': getattr(anchor, 'height', None),
-                    'text': getattr(shape, 'text', ''),
-                }
+    try:
+        # Get drawings from the worksheet
+        drawings = ws._drawing if hasattr(ws, '_drawing') else []
+        if not drawings and hasattr(ws, 'drawings'):
+            drawings = ws.drawings
+        
+        # Process each drawing
+        for drawing in drawings if drawings else []:
+            shape_info = {
+                'type': 'unknown',
+                'x': 0,
+                'y': 0,
+                'width': None,
+                'height': None,
+                'text': '',
+                'description': ''
+            }
+            
+            try:
+                # Get anchor information
+                if hasattr(drawing, 'anchor'):
+                    anchor = drawing.anchor
+                    shape_info.update({
+                        'x': getattr(anchor, 'col', 0),
+                        'y': getattr(anchor, 'row', 0),
+                        'width': getattr(anchor, 'width', None),
+                        'height': getattr(anchor, 'height', None)
+                    })
+                
+                # Determine shape type and extract specific information
+                if hasattr(drawing, '_shape_type'):
+                    shape_info['type'] = drawing._shape_type
+                elif isinstance(drawing, Image):
+                    shape_info['type'] = 'image'
+                else:
+                    shape_info['type'] = type(drawing).__name__
+                
+                # Extract text if available
+                if hasattr(drawing, 'text'):
+                    shape_info['text'] = drawing.text
+                elif hasattr(drawing, 'title'):
+                    shape_info['text'] = drawing.title
+                
+                # Get additional description if available
+                if hasattr(drawing, 'description'):
+                    shape_info['description'] = drawing.description
+                
                 shapes_info.append(shape_info)
+                
+            except Exception as shape_error:
+                st.warning(f"Error processing shape: {str(shape_error)}")
+                continue
+                
+    except Exception as ws_error:
+        st.warning(f"Error accessing worksheet drawings: {str(ws_error)}")
+        return []
     
     return shapes_info
 
