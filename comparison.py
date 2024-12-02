@@ -151,6 +151,10 @@ def compare_dataframes(df1, df2):
         """Create a hash value for row matching based on key columns with improved type handling"""
         values = []
         
+        def is_no_column(col_name):
+            """No.列かどうかを判定"""
+            return col_name.lower().strip() in ['no', 'no.', '番号']
+        
         def normalize_numeric(val):
             """数値を正規化して文字列に変換"""
             if pd.isna(val) or val is None:
@@ -175,7 +179,18 @@ def compare_dataframes(df1, df2):
                 return ''
             return str(val).strip().lower()  # 大文字小文字を区別しない
 
+        # No.列以外のキー列を優先して処理
+        no_columns = []
+        other_key_columns = []
+        
         for col in key_columns:
+            if is_no_column(col):
+                no_columns.append(col)
+            else:
+                other_key_columns.append(col)
+        
+        # No.列以外のキー列を処理
+        for col in other_key_columns:
             try:
                 val = row[col]
                 if pd.api.types.is_numeric_dtype(type(val)):
@@ -185,11 +200,24 @@ def compare_dataframes(df1, df2):
             except Exception:
                 values.append('')
         
+        # No.列を処理（行番号の自動更新を考慮）
+        for col in no_columns:
+            try:
+                val = row[col]
+                # No.列は参考情報として扱い、重みを小さくする
+                values.append(f"no_ref:{normalize_numeric(val)}")
+            except Exception:
+                values.append('')
+        
         # キー列の重み付けを反映したハッシュ値を生成
         weighted_values = []
         for i, val in enumerate(values):
-            # キー列の順序に基づいて重み付け
-            weight = len(key_columns) - i
+            if val.startswith('no_ref:'):
+                # No.列は最も低い重みを設定
+                weight = 0.1
+            else:
+                # その他のキー列は順序に基づいて重み付け
+                weight = len(other_key_columns) - i if i < len(other_key_columns) else 0.5
             weighted_values.append(f"{weight}:{val}")
         
         return '||'.join(weighted_values)
@@ -222,7 +250,14 @@ def compare_dataframes(df1, df2):
                 for col in common_cols:
                     val1 = str(row1[col]).strip() if pd.notna(row1[col]) else ''
                     val2 = str(row2[col]).strip() if pd.notna(row2[col]) else ''
+                    
+                    # No.列の場合は特別な処理
+                    if col.lower().strip() in ['no', 'no.', '番号']:
+                        # No.列の変更は、他の列に変更がある場合のみ記録
+                        continue
+                    
                     if val1 != val2:
+                        # 実際の変更として記録
                         df1_styles.append({
                             'field': col,
                             'rowIndex': idx1,
@@ -247,6 +282,7 @@ def compare_dataframes(df1, df2):
         """Calculate similarity between two rows with improved matching logic"""
         matches = 0
         total_weight = 0
+        no_column_differences = []  # No.列の差分を追跡
         
         def calculate_string_similarity(s1, s2):
             """文字列の類似度を計算（レーベンシュタイン距離ベース）"""
@@ -297,12 +333,22 @@ def compare_dataframes(df1, df2):
                 return 0.0
         
         for col in common_cols:
-            # キー列により高い重みを設定
-            weight = 3.0 if col in key_columns[:2] else 2.0 if col in key_columns else 1.0
-            total_weight += weight
+            # No.列の特別処理
+            is_no_col = col.lower().strip() in ['no', 'no.', '番号']
             
+            # キー列により高い重みを設定（No.列は低い重みに）
+            if is_no_col:
+                weight = 0.1
+            else:
+                weight = 3.0 if col in key_columns[:2] else 2.0 if col in key_columns else 1.0
+            
+            total_weight += weight
             val1 = row1[col]
             val2 = row2[col]
+            
+            # No.列の差分を追跡
+            if is_no_col and val1 != val2:
+                no_column_differences.append((col, val1, val2))
             
             # 数値型の場合
             if pd.api.types.is_numeric_dtype(type(val1)) or pd.api.types.is_numeric_dtype(type(val2)):
