@@ -6,6 +6,83 @@ from openpyxl.drawing.spreadsheet_drawing import SpreadsheetDrawing
 from openpyxl.drawing.image import Image
 from openpyxl.drawing.xdr import XDRPoint2D, XDRPositiveSize2D
 
+def _process_shape(shape):
+    try:
+        shape_info = {
+            'type': 'shape',
+            'shape_type': getattr(shape, 'type', None) or getattr(shape, '_type', 'unknown'),
+            'x': getattr(shape, 'col', 0) or 0,
+            'y': getattr(shape, 'row', 0) or 0,
+            'width': getattr(shape, 'width', None),
+            'height': getattr(shape, 'height', None),
+            'text': getattr(shape, 'text', '')
+        }
+        return [shape_info]
+    except Exception as e:
+        st.warning(f"図形の処理中にエラー: {str(e)}")
+        return []
+
+def _process_image(img):
+    try:
+        anchor = getattr(img, 'anchor', None)
+        if anchor:
+            x = getattr(anchor, 'col', 0) or 0
+            y = getattr(anchor, 'row', 0) or 0
+            width = getattr(anchor, 'width', None)
+            height = getattr(anchor, 'height', None)
+        else:
+            x = getattr(img, 'col', 0) or 0
+            y = getattr(img, 'row', 0) or 0
+            width = getattr(img, 'width', None)
+            height = getattr(img, 'height', None)
+        
+        return [{
+            'type': 'image',
+            'x': x,
+            'y': y,
+            'width': width,
+            'height': height,
+            'text': ''
+        }]
+    except Exception as e:
+        st.warning(f"画像の処理中にエラー: {str(e)}")
+        return []
+
+def _process_group(group):
+    try:
+        shapes = []
+        for shape in getattr(group, 'shapes', []):
+            shapes.extend(_process_shape(shape))
+        return shapes
+    except Exception as e:
+        st.warning(f"グループ図形の処理中にエラー: {str(e)}")
+        return []
+
+def _process_smart_art(smart_art):
+    try:
+        shapes = []
+        for shape in getattr(smart_art, 'shapes', []):
+            shapes.extend(_process_shape(shape))
+        return shapes
+    except Exception as e:
+        st.warning(f"SmartArtの処理中にエラー: {str(e)}")
+        return []
+
+def _process_chart(chart):
+    try:
+        return [{
+            'type': 'chart',
+            'shape_type': getattr(chart, 'type', 'unknown'),
+            'x': getattr(chart, 'anchor_col', 0) or 0,
+            'y': getattr(chart, 'anchor_row', 0) or 0,
+            'width': getattr(chart, 'width', None),
+            'height': getattr(chart, 'height', None),
+            'text': getattr(chart, 'title', '')
+        }]
+    except Exception as e:
+        st.warning(f"チャートの処理中にエラー: {str(e)}")
+        return []
+
 def extract_shape_info(wb, sheet_name):
     st.write("図形情報の抽出を開始...")
     st.write(f"ワークシート名: {sheet_name}")
@@ -14,164 +91,66 @@ def extract_shape_info(wb, sheet_name):
     ws = wb[sheet_name]
     
     try:
-        # Method 1: _drawing.drawingsから画像を取得
-        st.write("描画オブジェクトの検索...")
-        if hasattr(ws, '_drawing') and ws._drawing:
-            for shape in ws._drawing.drawings:
-                try:
-                    if hasattr(shape, '_rel') and shape._rel.target:
-                        # 図形の情報をデバッグ出力
-                        st.write(f"検出された図形の種類: {shape._type if hasattr(shape, '_type') else 'unknown'}")
-                        st.write(f"図形の位置: セル {getattr(shape, 'col', 0)}, {getattr(shape, 'row', 0)}")
-                        st.write(f"図形のサイズ: 幅 {getattr(shape, 'width', 'N/A')}, 高さ {getattr(shape, 'height', 'N/A')}")
-                        
-                        # 画像情報を取得
-                        x = getattr(shape, 'col', 0) or 0
-                        y = getattr(shape, 'row', 0) or 0
-                        width = getattr(shape, 'width', None)
-                        height = getattr(shape, 'height', None)
-                        
-                        shapes_info.append({
-                            'type': 'image',
-                            'x': x,
-                            'y': y,
-                            'width': width,
-                            'height': height,
-                            'text': ''
-                        })
-                except Exception as e:
-                    st.warning(f"画像の処理中にエラー: {str(e)}")
-                    continue
-        
-        # Method 2: _imagesから画像を取得
-        st.write("埋め込み画像オブジェクトの検索...")
-        if hasattr(ws, '_images'):
-            for img in ws._images:
-                try:
-                    anchor = getattr(img, 'anchor', None)
-                    if anchor:
-                        # 図形の情報をデバッグ出力
-                        st.write(f"検出された図形の種類: image")
-                        st.write(f"図形の位置: セル {getattr(anchor, 'col', 0)}, {getattr(anchor, 'row', 0)}")
-                        st.write(f"図形のサイズ: 幅 {getattr(anchor, 'width', 'N/A')}, 高さ {getattr(anchor, 'height', 'N/A')}")
-                        
-                        x = getattr(anchor, 'col', 0) or 0
-                        y = getattr(anchor, 'row', 0) or 0
-                        width = getattr(anchor, 'width', None)
-                        height = getattr(anchor, 'height', None)
-                        
-                        shapes_info.append({
-                            'type': 'image',
-                            'x': x,
-                            'y': y,
-                            'width': width,
-                            'height': height,
-                            'text': ''
-                        })
-                except Exception as e:
-                    st.warning(f"画像の処理中にエラー: {str(e)}")
-                    continue
-
-        # Method 3: 図形（シェイプ）の検出
-        st.write("図形（シェイプ）オブジェクトの検索...")
-
-        # 全ての可能な図形コンテナを確認
-        shape_containers = []
-
-        # 1. _drawingから図形を検出
+        # Method 1: 基本的な図形検出
+        st.write("1. 基本的な図形の検索...")
         if hasattr(ws, '_drawing'):
-            st.write("_drawingから図形を検索中...")
-            # _shapesプロパティを確認
-            if hasattr(ws._drawing, '_shapes'):
-                st.write("_shapes検出")
-                shape_containers.extend(ws._drawing._shapes)
-            # shapesプロパティを確認
+            st.write(f"_drawingオブジェクトを検出: {ws._drawing}")
             if hasattr(ws._drawing, 'shapes'):
-                st.write("shapes検出")
-                shape_containers.extend(ws._drawing.shapes)
+                st.write(f"図形数: {len(ws._drawing.shapes)}")
+                for shape in ws._drawing.shapes:
+                    st.write(f"検出された図形: {shape}")
+                    st.write(f"図形の属性: {dir(shape)}")
+                    shapes_info.extend(_process_shape(shape))
 
-        # 2. 直接のshapesプロパティを確認
-        if hasattr(ws, 'shapes'):
-            st.write("ワークシートの直接のshapesを検索中...")
-            shape_containers.extend(ws.shapes)
+        # Method 2: 画像オブジェクト検出
+        st.write("2. 画像オブジェクトの検索...")
+        if hasattr(ws, '_images'):
+            st.write(f"画像数: {len(ws._images)}")
+            for img in ws._images:
+                st.write(f"検出された画像: {img}")
+                shapes_info.extend(_process_image(img))
 
-        # 3. _chartsプロパティを確認（図形が含まれる可能性がある）
+        # Method 3: グループ化されたオブジェクト検出
+        st.write("3. グループ化されたオブジェクトの検索...")
+        if hasattr(ws, '_drawing') and hasattr(ws._drawing, '_group_shapes'):
+            st.write("グループ化された図形を検索中...")
+            for group in ws._drawing._group_shapes:
+                st.write(f"検出されたグループ: {group}")
+                shapes_info.extend(_process_group(group))
+
+        # Method 4: SmartArtオブジェクト検出
+        st.write("4. SmartArtオブジェクトの検索...")
+        if hasattr(ws, '_drawing') and hasattr(ws._drawing, '_smart_art'):
+            st.write("SmartArtオブジェクトを検索中...")
+            for smart_art in ws._drawing._smart_art:
+                st.write(f"検出されたSmartArt: {smart_art}")
+                shapes_info.extend(_process_smart_art(smart_art))
+
+        # Method 5: チャートオブジェクト検出
+        st.write("5. チャートオブジェクトの検索...")
         if hasattr(ws, '_charts'):
-            st.write("_chartsから図形を検索中...")
-            shape_containers.extend(ws._charts)
+            st.write(f"チャート数: {len(ws._charts)}")
+            for chart in ws._charts:
+                st.write(f"検出されたチャート: {chart}")
+                shapes_info.extend(_process_chart(chart))
 
-        st.write(f"検出された図形コンテナの数: {len(shape_containers)}")
+        # 検出結果のサマリー
+        st.write("図形検出サマリー:")
+        st.write(f"合計検出数: {len(shapes_info)}")
+        
+        # 種類別の集計
+        shape_types = {}
+        for shape in shapes_info:
+            shape_type = shape.get('type', 'unknown')
+            shape_types[shape_type] = shape_types.get(shape_type, 0) + 1
+        
+        for shape_type, count in shape_types.items():
+            st.write(f"- {shape_type}: {count}個")
 
-        for shape in shape_containers:
-            try:
-                st.write(f"図形オブジェクトを処理中: {shape}")
-                st.write(f"図形のタイプ: {type(shape)}")
-                st.write(f"図形の属性: {dir(shape)}")
-
-                # 図形の種類を決定
-                shape_type = None
-                if hasattr(shape, 'type'):
-                    shape_type = shape.type
-                elif hasattr(shape, '_type'):
-                    shape_type = shape._type
-                elif hasattr(shape, 'shape_type'):
-                    shape_type = shape.shape_type
-                else:
-                    shape_type = str(type(shape).__name__)
-
-                st.write(f"検出された図形の種類: {shape_type}")
-
-                # 位置情報の取得
-                x, y = 0, 0
-                if hasattr(shape, 'anchor'):
-                    anchor = shape.anchor
-                    x = getattr(anchor, 'col', 0)
-                    y = getattr(anchor, 'row', 0)
-                    st.write(f"アンカー位置: ({x}, {y})")
-                elif hasattr(shape, '_anchor'):
-                    anchor = shape._anchor
-                    x = getattr(anchor, 'col', 0)
-                    y = getattr(anchor, 'row', 0)
-                    st.write(f"_アンカー位置: ({x}, {y})")
-                elif hasattr(shape, 'coordinate'):
-                    x, y = shape.coordinate
-                    st.write(f"座標位置: ({x}, {y})")
-
-                # サイズ情報の取得
-                width = getattr(shape, 'width', None)
-                height = getattr(shape, 'height', None)
-                if width is not None and height is not None:
-                    st.write(f"図形のサイズ: 幅 {width}, 高さ {height}")
-
-                shapes_info.append({
-                    'type': 'shape',
-                    'shape_type': shape_type,
-                    'x': x,
-                    'y': y,
-                    'width': width,
-                    'height': height,
-                    'text': getattr(shape, 'text', '')
-                })
-                st.write("図形情報を追加しました")
-
-            except Exception as e:
-                st.warning(f"図形の処理中にエラー: {str(e)}")
-                st.write(f"エラーの詳細: {type(e).__name__}")
-                continue
-                    
     except Exception as e:
-        st.warning(f"ワークシートの処理中にエラー: {str(e)}")
-    
-    # 図形の合計数と種類別集計を表示
-    st.write(f"検出された図形の合計数: {len(shapes_info)}")
-    st.write("図形の種類別集計:")
-    shape_types = {}
-    for shape in shapes_info:
-        shape_type = shape.get('type', 'unknown')
-        shape_types[shape_type] = shape_types.get(shape_type, 0) + 1
-    for shape_type, count in shape_types.items():
-        st.write(f"- {shape_type}: {count}個")
-    
+        st.error(f"図形検出中にエラー発生: {str(e)}")
+        st.write(f"エラーの詳細: {type(e).__name__}")
+
     return shapes_info
 
 def compare_shapes(shapes1, shapes2):
