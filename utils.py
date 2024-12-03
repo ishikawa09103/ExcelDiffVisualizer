@@ -201,6 +201,14 @@ def export_comparison(comparison_result, sheet1_name=None, sheet2_name=None):
         # Write data differences with sheet names
         sheet1_label = f'File1_{sheet1_name}' if sheet1_name else 'File1'
         sheet2_label = f'File2_{sheet2_name}' if sheet2_name else 'File2'
+        
+        # シート名が長すぎる場合は短縮
+        max_length = 31  # Excelのシート名の最大長は31文字
+        if len(sheet1_label) > max_length:
+            sheet1_label = sheet1_label[:max_length]
+        if len(sheet2_label) > max_length:
+            sheet2_label = sheet2_label[:max_length]
+            
         comparison_result['df1'].to_excel(writer, sheet_name=sheet1_label, index=False)
         comparison_result['df2'].to_excel(writer, sheet_name=sheet2_label, index=False)
         # Create a more detailed summary DataFrame with Excel-style cell references

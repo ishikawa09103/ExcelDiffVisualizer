@@ -101,130 +101,142 @@ def main():
                     st.write(f"ファイル2のシート名: {', '.join(sheets2)}")
                     
                     # Sheet selection
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        sheet1 = st.selectbox("ファイル1のシートを選択", sheets1)
-                    with col2:
-                        sheet2 = st.selectbox("ファイル2のシートを選択", sheets2)
+                    st.subheader("シートの選択")
+                    selected_sheets1 = st.multiselect("ファイル1のシートを選択", sheets1, default=[sheets1[0]])
+                    selected_sheets2 = st.multiselect("ファイル2のシートを選択", sheets2, default=[sheets2[0]])
                     
-                    # Reset file pointers for reading Excel
-                    file1.seek(0)
-                    file2.seek(0)
+                    if len(selected_sheets1) != len(selected_sheets2):
+                        st.error("選択されたシートの数が一致しません。")
+                        return
                     
-                    # Load and compare sheets
-                    try:
-                        df1 = pd.read_excel(file1, sheet_name=sheet1)
-                        df2 = pd.read_excel(file2, sheet_name=sheet2)
+                    if not selected_sheets1 or not selected_sheets2:
+                        st.warning("比較するシートを選択してください。")
+                        return
+
+                    # 全シートの比較結果を格納する配列
+                    all_comparison_results = []
+                    
+                    # 各シートペアを比較
+                    for sheet1, sheet2 in zip(selected_sheets1, selected_sheets2):
+                        st.subheader(f"シートの比較: {sheet1} vs {sheet2}")
                         
-                        if df1.empty or df2.empty:
-                            st.warning("選択されたシートにデータが存在しません。")
-                            return
-                            
-                        st.info("画像の比較を開始...")
-                        shapes1 = comparison.extract_shape_info(file1_path, sheet1)
-                        st.write(f"ファイル1の画像数: {len(shapes1)}")
-                        shapes2 = comparison.extract_shape_info(file2_path, sheet2)
-                        st.write(f"ファイル2の画像数: {len(shapes2)}")
-                        shape_differences = comparison.compare_shapes(shapes1, shapes2)
-                        
-                        # Compare dataframes and process results
                         try:
+                            # Reset file pointers for reading Excel
+                            file1.seek(0)
+                            file2.seek(0)
+                            
+                            # Load sheet data
+                            df1 = pd.read_excel(file1, sheet_name=sheet1)
+                            df2 = pd.read_excel(file2, sheet_name=sheet2)
+                            
+                            if df1.empty or df2.empty:
+                                st.warning(f"シート '{sheet1}' または '{sheet2}' にデータが存在しません。")
+                                continue
+                            
+                            # Compare shapes
+                            st.info(f"シート '{sheet1}' と '{sheet2}' の画像比較を開始...")
+                            shapes1 = comparison.extract_shape_info(file1_path, sheet1)
+                            st.write(f"ファイル1の画像数: {len(shapes1)}")
+                            shapes2 = comparison.extract_shape_info(file2_path, sheet2)
+                            st.write(f"ファイル2の画像数: {len(shapes2)}")
+                            shape_differences = comparison.compare_shapes(shapes1, shapes2)
+                            
+                            # Compare data
                             comparison_result = comparison.compare_dataframes(df1, df2)
                             if not isinstance(comparison_result, dict):
                                 st.error("比較結果の形式が不正です。")
-                                return
+                                continue
                             
-                            # Add shape differences to results
+                            # Add sheet names and shape differences to results
+                            comparison_result['sheet1_name'] = sheet1
+                            comparison_result['sheet2_name'] = sheet2
                             comparison_result['shape_differences'] = shape_differences
-                        except Exception as e:
-                            st.error(f"データの比較中にエラーが発生しました: {str(e)}")
-                            return
-                        
-                        # Display comparison results with error handling
-                        st.subheader("データ比較")
-                        
-                        col1, col2 = st.columns(2)
-                        
-                        try:
+                            
+                            all_comparison_results.append(comparison_result)
+                            
+                            # Display individual sheet comparison results
+                            col1, col2 = st.columns(2)
+                            
                             with col1:
-                                st.markdown("### ファイル 1")
+                                st.markdown(f"### ファイル 1 - {sheet1}")
                                 if 'df1' in comparison_result and not comparison_result['df1'].empty:
                                     grid1 = utils.create_grid(comparison_result['df1'], comparison_result.get('df1_styles', None))
                                 else:
-                                    st.warning("ファイル1のデータを表示できません。")
+                                    st.warning("データを表示できません。")
                             
                             with col2:
-                                st.markdown("### ファイル 2")
+                                st.markdown(f"### ファイル 2 - {sheet2}")
                                 if 'df2' in comparison_result and not comparison_result['df2'].empty:
                                     grid2 = utils.create_grid(comparison_result['df2'], comparison_result.get('df2_styles', None))
                                 else:
-                                    st.warning("ファイル2のデータを表示できません。")
+                                    st.warning("データを表示できません。")
+                            
+                            # Display shape differences for this sheet pair
+                            if shape_differences:
+                                st.subheader(f"図形の差分 ({sheet1} vs {sheet2})")
+                                utils.display_shape_differences(shape_differences)
+                            
                         except Exception as e:
-                            st.error(f"データの表示中にエラーが発生しました: {str(e)}")
-                            return
+                            st.error(f"シート '{sheet1}' と '{sheet2}' の比較中にエラーが発生しました: {str(e)}")
+                            continue
+                    
+                    # 全シートの比較が完了した後、サマリーを表示
+                    if all_comparison_results:
+                        st.markdown("---")
+                        st.subheader("全体の比較結果サマリー")
                         
-                        # Display shape differences
-                        if shape_differences:
-                            st.subheader("図形の差分")
-                            utils.display_shape_differences(shape_differences)
+                        # Create combined summary DataFrame
+                        all_summary_data = []
                         
-                        # Display comparison summary
-                        st.subheader("比較結果サマリー")
+                        for result in all_comparison_results:
+                            sheet1_name = result['sheet1_name']
+                            sheet2_name = result['sheet2_name']
+                            
+                            if 'diff_summary' in result:
+                                for diff in result['diff_summary'].to_dict('records'):
+                                    if diff['type'] == 'modified':
+                                        df1 = result['df1']
+                                        col_idx = df1.columns.get_loc(diff['column'])
+                                        cell_ref_old = utils.get_excel_cell_reference(col_idx, diff['row_index_old'])
+                                        cell_ref_new = utils.get_excel_cell_reference(col_idx, diff['row_index_new'])
+                                        
+                                        all_summary_data.append({
+                                            'シート名': f"{sheet1_name} → {sheet2_name}",
+                                            '変更タイプ': 'データ変更',
+                                            'セル位置 (変更前)': cell_ref_old,
+                                            'セル位置 (変更後)': cell_ref_new,
+                                            '変更前の値': diff['value_old'],
+                                            '変更後の値': diff['value_new']
+                                        })
+                                    else:
+                                        df = result['df1']
+                                        row_idx = diff['row_index']
+                                        range_ref = utils.get_excel_range_reference(row_idx, 0, len(df.columns) - 1)
+                                        
+                                        current_sheet = sheet2_name if diff['type'] == 'added' else sheet1_name
+                                        all_summary_data.append({
+                                            'シート名': current_sheet,
+                                            '変更タイプ': 'データ追加' if diff['type'] == 'added' else 'データ削除',
+                                            'セル位置': f"{row_idx + 1}行目 ({range_ref})",
+                                            '値': ' | '.join([f"{k}: {v}" for k, v in diff['values'].items() if pd.notna(v)])
+                                        })
                         
-                        # Create summary DataFrame
-                        summary_data = []
-                        
-                        # Add data differences
-                        if 'diff_summary' in comparison_result:
-                            for diff in comparison_result['diff_summary'].to_dict('records'):
-                                if diff['type'] == 'modified':
-                                    col_idx = df1.columns.get_loc(diff['column'])
-                                    cell_ref_old = utils.get_excel_cell_reference(col_idx, diff['row_index_old'])
-                                    cell_ref_new = utils.get_excel_cell_reference(col_idx, diff['row_index_new'])
-                                    summary_data.append({
-                                        'シート名': f"{sheet1} → {sheet2}",
-                                        '変更タイプ': 'データ変更',
-                                        'セル位置 (変更前)': cell_ref_old,
-                                        'セル位置 (変更後)': cell_ref_new,
-                                        '変更前の値': diff['value_old'],
-                                        '変更後の値': diff['value_new']
-                                    })
-                                else:
-                                    row_idx = diff['row_index']
-                                    range_ref = utils.get_excel_range_reference(row_idx, 0, len(df1.columns) - 1)
-                                    row_values = []
-                                    for col in df1.columns:
-                                        val = diff['values'].get(col, '')
-                                        if pd.notna(val):
-                                            row_values.append(f"{col}: {val}")
-                                    
-                                    current_sheet = sheet2 if diff['type'] == 'added' else sheet1
-                                    summary_data.append({
-                                        'シート名': current_sheet,
-                                        '変更タイプ': 'データ追加' if diff['type'] == 'added' else 'データ削除',
-                                        'セル位置': f"{row_idx + 1}行目 ({range_ref})",
-                                        '値': ' | '.join(row_values)
-                                    })
-                        
-                        if summary_data:
-                            summary_df = pd.DataFrame(summary_data)
+                        if all_summary_data:
+                            summary_df = pd.DataFrame(all_summary_data)
                             st.dataframe(summary_df)
                         else:
-                            st.info("差分は検出されませんでした")
+                            st.info("全シートで差分は検出されませんでした")
                         
-                        # Export options
+                        # Export options for all sheets
                         st.markdown("---")
                         st.subheader("エクスポート")
-                        utils.export_comparison(comparison_result, sheet1, sheet2)
-                        
-                    except Exception as e:
-                        st.error(f"シートの処理中にエラーが発生しました: {str(e)}")
-                        return
-                        
-                except Exception as e:
-                    st.error(f"シート情報の取得中にエラーが発生しました: {str(e)}")
-                    return
+                        for result in all_comparison_results:
+                            utils.export_comparison(result, result['sheet1_name'], result['sheet2_name'])
                     
+                except Exception as e:
+                    st.error(f"比較処理中にエラーが発生しました: {str(e)}")
+                    return
+                
             except Exception as e:
                 st.error(f"ファイルの処理中にエラーが発生しました: {str(e)}")
                 return
