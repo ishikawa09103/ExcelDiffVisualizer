@@ -100,9 +100,17 @@ def main():
                     st.write(f"ファイル2のシート数: {len(sheets2)}")
                     st.write(f"ファイル2のシート名: {', '.join(sheets2)}")
                     
-                    # シート選択の前にシートの追加/削除を確認
-                    added_sheets = set(sheets2) - set(sheets1)
-                    deleted_sheets = set(sheets1) - set(sheets2)
+                    # シート選択の前にシートの追加/削除/変更を確認
+                    sheet_pairs, renamed_sheets = comparison.find_similar_sheets(sheets1, sheets2, file1_path, file2_path)
+
+                    # シート名の変更を表示
+                    if sheet_pairs:
+                        for old_name, new_name, similarity in sheet_pairs:
+                            st.info(f"シート名の変更を検出: '{old_name}' → '{new_name}' (類似度: {similarity:.1%})")
+
+                    # 残りのシートの追加/削除を確認
+                    added_sheets = set(sheets2) - set(sheets1) - set(s[1] for s in sheet_pairs)
+                    deleted_sheets = set(sheets1) - set(sheets2) - set(s[0] for s in sheet_pairs)
 
                     if added_sheets:
                         st.info(f"追加されたシート: {', '.join(added_sheets)}")

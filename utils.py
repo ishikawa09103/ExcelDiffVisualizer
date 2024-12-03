@@ -178,7 +178,7 @@ def display_shape_differences(shape_differences):
                 except Exception as e:
                     st.error(f"変更後の情報表示中にエラー: {str(e)}")
 
-def export_comparison(comparison_results, sheets1, sheets2):
+def export_comparison(comparison_results, sheets1, sheets2, sheet_pairs=None):
     """
     Export comparison results for all sheets in a single Excel file
     comparison_results: List of comparison result dictionaries, each containing df1, df2, diff_summary, etc.
@@ -190,9 +190,20 @@ def export_comparison(comparison_results, sheets1, sheets2):
         # サマリーデータの作成
         all_summary_data = []
         
+        # シート名の変更情報を追加
+        if sheet_pairs:
+            sheet_changes = []
+            for old_name, new_name, similarity in sheet_pairs:
+                sheet_changes.append({
+                    'シート名': f"{old_name} → {new_name}",
+                    '変更タイプ': 'シート名変更',
+                    '値': f"シート名が変更されました (類似度: {similarity:.1%})"
+                })
+            all_summary_data.extend(sheet_changes)
+
         # シートの追加/削除情報を追加
-        added_sheets = set(sheets2) - set(sheets1)
-        deleted_sheets = set(sheets1) - set(sheets2)
+        added_sheets = set(sheets2) - set(sheets1) - set(s[1] for s in sheet_pairs) if sheet_pairs else set(sheets2) - set(sheets1)
+        deleted_sheets = set(sheets1) - set(sheets2) - set(s[0] for s in sheet_pairs) if sheet_pairs else set(sheets1) - set(sheets2)
         
         if added_sheets or deleted_sheets:
             sheet_changes = []

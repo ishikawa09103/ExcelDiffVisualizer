@@ -1,14 +1,13 @@
-import pandas as pd
 import streamlit as st
-import numpy as np
+import pandas as pd
+import openpyxl
+from openpyxl.drawing.image import Image
+import io
 import zipfile
 import os
 from lxml import etree
 import tempfile
-from openpyxl import load_workbook
-from openpyxl.drawing.spreadsheet_drawing import SpreadsheetDrawing, AnchorMarker
-from openpyxl.drawing.image import Image
-from openpyxl.drawing.xdr import XDRPoint2D, XDRPositiveSize2D
+import numpy as np
 
 def _get_anchor_coordinates(anchor):
     """アンカー情報から座標を取得する共通関数"""
@@ -69,446 +68,209 @@ def _process_drawing(drawing, shape_type='unknown'):
         st.warning(f"描画オブジェクトの処理中にエラー: {str(e)}")
         return None
 
-def extract_shape_info(wb_path, sheet_name):
-    st.write(f"図形情報の抽出を開始... シート名: {sheet_name}")
-    shapes_info = []
-    
+def extract_shape_info(file_path, sheet_name):
+    """
+    Extract shape information from an Excel sheet
+    """
     try:
-        # 一時ディレクトリの作成
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # ExcelファイルをZIPとして解凍
-            with zipfile.ZipFile(wb_path, 'r') as zip_ref:
-                zip_ref.extractall(temp_dir)
-            
-            # drawings フォルダのパス
-            drawings_dir = os.path.join(temp_dir, 'xl', 'drawings')
-            
-            # drawing*.xmlファイルを検索
-            if os.path.exists(drawings_dir):
-                for file in os.listdir(drawings_dir):
-                    if file.startswith('drawing') and file.endswith('.xml'):
-                        drawing_path = os.path.join(drawings_dir, file)
-                        
-                        # XMLファイルを解析
-                        tree = etree.parse(drawing_path)
-                        root = tree.getroot()
-                        
-                        # 名前空間の取得
-                        nsmap = root.nsmap
-                        
-                        # 図形情報の抽出
-                        for shape in root.findall('.//xdr:twoCellAnchor', namespaces=nsmap):
-                            try:
-                                # 位置情報の取得
-                                from_elem = shape.find('.//xdr:from', namespaces=nsmap)
-                                to_elem = shape.find('.//xdr:to', namespaces=nsmap)
-                                
-                                if from_elem is not None and to_elem is not None:
-                                    x = int(from_elem.find('.//xdr:col', namespaces=nsmap).text)
-                                    y = int(from_elem.find('.//xdr:row', namespaces=nsmap).text)
-                                    
-                                    # 図形の種類を判定
-                                    shape_type = 'unknown'
-                                    if shape.find('.//xdr:pic', namespaces=nsmap) is not None:
-                                        shape_type = 'image'
-                                    elif shape.find('.//xdr:sp', namespaces=nsmap) is not None:
-                                        shape_type = 'shape'
-                                    
-                                    # 図形情報の保存
-                                    shape_info = {
-                                        'type': shape_type,
-                                        'x': x,
-                                        'y': y,
-                                        'width': int(to_elem.find('.//xdr:col', namespaces=nsmap).text) - x,
-                                        'height': int(to_elem.find('.//xdr:row', namespaces=nsmap).text) - y
-                                    }
-                                    
-                                    # テキスト情報の取得（存在する場合）
-                                    text_elem = shape.find('.//xdr:txBody//a:t', namespaces=nsmap)
-                                    if text_elem is not None:
-                                        shape_info['text'] = text_elem.text
-                                    
-                                    shapes_info.append(shape_info)
-                                    st.write(f"図形を検出: {shape_type} at ({x}, {y})")
-                            except Exception as e:
-                                st.warning(f"図形の解析中にエラー: {str(e)}")
-                                continue
-                
-            st.write(f"検出された図形の総数: {len(shapes_info)}")
-            
+        wb = openpyxl.load_workbook(file_path)
+        sheet = wb[sheet_name]
+        shapes = []
+        
+        for shape in sheet._images:
+            if isinstance(shape, Image):
+                shape_info = {
+                    'type': 'image',
+                    'x': shape.anchor._from.col,
+                    'y': shape.anchor._from.row,
+                    'width': shape.width,
+                    'height': shape.height
+                }
+                shapes.append(shape_info)
+        
+        wb.close()
+        return shapes
     except Exception as e:
-        st.error(f"図形検出中にエラーが発生: {str(e)}")
-    
-    return shapes_info
+        st.error(f"画像情報の抽出中にエラー: {str(e)}")
+        return []
 
 def compare_shapes(shapes1, shapes2):
+    """
+    Compare shapes between two Excel sheets
+    """
     differences = []
     
-    # Find added and modified shapes
-    for idx2, shape2 in enumerate(shapes2):
-        found_match = False
-        for idx1, shape1 in enumerate(shapes1):
+    # Track matched shapes to avoid duplicate comparisons
+    matched_shapes2 = set()
+    
+    # Compare shapes from file1 with shapes from file2
+    for shape1 in shapes1:
+        match_found = False
+        for i, shape2 in enumerate(shapes2):
+            if i in matched_shapes2:
+                continue
+                
             if (shape1['x'] == shape2['x'] and 
-                shape1['y'] == shape2['y'] and 
-                shape1['type'] == shape2['type']):
-                found_match = True
-                # Check for modifications
+                shape1['y'] == shape2['y']):
+                # Shapes are in the same position, check for modifications
                 if (shape1.get('width') != shape2.get('width') or 
-                    shape1.get('height') != shape2.get('height') or 
-                    shape1.get('text') != shape2.get('text')):
+                    shape1.get('height') != shape2.get('height')):
                     differences.append({
                         'type': 'modified',
-                        'shape_index': idx2,
                         'old_shape': shape1,
                         'new_shape': shape2
                     })
+                matched_shapes2.add(i)
+                match_found = True
                 break
         
-        if not found_match:
-            differences.append({
-                'type': 'added',
-                'shape_index': idx2,
-                'shape': shape2
-            })
-    
-    # Find deleted shapes
-    for idx1, shape1 in enumerate(shapes1):
-        found_match = False
-        for shape2 in shapes2:
-            if (shape1['x'] == shape2['x'] and 
-                shape1['y'] == shape2['y'] and 
-                shape1['type'] == shape2['type']):
-                found_match = True
-                break
-        
-        if not found_match:
+        if not match_found:
             differences.append({
                 'type': 'deleted',
-                'shape_index': idx1,
                 'shape': shape1
+            })
+    
+    # Find added shapes (those in file2 that weren't matched)
+    for i, shape2 in enumerate(shapes2):
+        if i not in matched_shapes2:
+            differences.append({
+                'type': 'added',
+                'shape': shape2
             })
     
     return differences
 
+def calculate_sheet_similarity(df1, df2):
+    """
+    Calculate similarity between two dataframes
+    """
+    try:
+        # Get common columns
+        common_cols = list(set(df1.columns) & set(df2.columns))
+        if not common_cols:
+            return 0.0
+            
+        # Calculate column similarity
+        column_similarity = len(common_cols) / max(len(df1.columns), len(df2.columns))
+        
+        # Calculate data similarity
+        matching_cells = 0
+        total_cells = 0
+        
+        for col in common_cols:
+            df1_col = df1[col].astype(str)
+            df2_col = df2[col].astype(str)
+            
+            # Compare each cell
+            matches = (df1_col == df2_col).sum()
+            matching_cells += matches
+            total_cells += max(len(df1_col), len(df2_col))
+        
+        data_similarity = matching_cells / total_cells if total_cells > 0 else 0
+        
+        # Calculate overall similarity
+        return (column_similarity + data_similarity) / 2
+    except Exception as e:
+        st.error(f"類似度計算中にエラー: {str(e)}")
+        return 0.0
+
+def find_similar_sheets(sheets1, sheets2, file1_path, file2_path, similarity_threshold=0.95):
+    """
+    Find similar sheets with different names
+    """
+    sheet_pairs = []
+    renamed_sheets = []
+    
+    # Find unpaired sheets
+    unpaired_sheets1 = set(sheets1) - set(sheets2)
+    unpaired_sheets2 = set(sheets2) - set(sheets1)
+    
+    for sheet1 in unpaired_sheets1:
+        df1 = pd.read_excel(file1_path, sheet_name=sheet1)
+        
+        for sheet2 in unpaired_sheets2:
+            df2 = pd.read_excel(file2_path, sheet_name=sheet2)
+            
+            similarity = calculate_sheet_similarity(df1, df2)
+            if similarity >= similarity_threshold:
+                sheet_pairs.append((sheet1, sheet2, similarity))
+                renamed_sheets.extend([sheet1, sheet2])
+                break
+    
+    return sheet_pairs, renamed_sheets
+
 def compare_dataframes(df1, df2):
     """
-    Compare two dataframes and return differences with improved row matching
+    Compare two dataframes and return differences with styling information
     """
-    # Create copies for styling
-    df1_result = df1.copy()
-    df2_result = df2.copy()
-    
-    # Initialize style information
-    df1_styles = []
-    df2_styles = []
-    differences = []
+    # Convert all columns to string type for comparison
+    df1 = df1.astype(str)
+    df2 = df2.astype(str)
     
     # Get common columns
     common_cols = list(set(df1.columns) & set(df2.columns))
     
-    # Identify potential key columns
-    key_columns = [col for col in common_cols if any(key in col.lower() 
-                  for key in ['id', 'code', 'key', 'name', 'no', '番号'])]
+    # Create results dataframes
+    df1_result = df1.copy()
+    df2_result = df2.copy()
     
-    if not key_columns:
-        # If no key columns found, use the first column and additional columns for better matching
-        key_columns = common_cols[:min(3, len(common_cols))]
+    # Initialize style dictionaries
+    df1_styles = {col: [''] * len(df1) for col in df1.columns}
+    df2_styles = {col: [''] * len(df2) for col in df2.columns}
     
-    def create_row_hash(row):
-        """Create a hash value for row matching based on key columns with improved type handling"""
-        values = []
-        
-        def is_no_column(col_name):
-            """No.列かどうかを判定"""
-            return col_name.lower().strip() in ['no', 'no.', '番号']
-        
-        def normalize_numeric(val):
-            """数値を正規化して文字列に変換"""
-            if pd.isna(val) or val is None:
-                return ''
-            try:
-                if isinstance(val, (int, np.integer)):
-                    return str(int(val))
-                elif isinstance(val, float):
-                    # 整数の場合は整数として扱う
-                    if val.is_integer():
-                        return str(int(val))
-                    # 小数の場合は固定精度で表現
-                    return f"{val:.6f}".rstrip('0').rstrip('.')
-                else:
-                    return str(val)
-            except (AttributeError, ValueError, TypeError):
-                return str(val)
-        
-        def normalize_string(val):
-            """文字列を正規化"""
-            if pd.isna(val) or val is None:
-                return ''
-            return str(val).strip().lower()
-        
-        # No.列以外のキー列を優先して処理
-        no_columns = []
-        other_key_columns = []
-        
-        for col in key_columns:
-            if is_no_column(col):
-                no_columns.append(col)
-            else:
-                other_key_columns.append(col)
-        
-        # No.列以外のキー列を処理
-        for col in other_key_columns:
-            try:
-                val = row[col]
-                if pd.api.types.is_numeric_dtype(type(val)):
-                    values.append(normalize_numeric(val))
-                else:
-                    values.append(normalize_string(val))
-            except Exception:
-                values.append('')
-        
-        # No.列を処理（行番号の自動更新を考慮）
-        for col in no_columns:
-            try:
-                val = row[col]
-                # No.列は参考情報として扱い、重みを小さくする
-                values.append(f"no_ref:{normalize_numeric(val)}")
-            except Exception:
-                values.append('')
-        
-        # キー列の重み付けを反映したハッシュ値を生成
-        weighted_values = []
-        for i, val in enumerate(values):
-            if val.startswith('no_ref:'):
-                # No.列は最も低い重みを設定
-                weight = 0.1
-            else:
-                # その他のキー列は順序に基づいて重み付け
-                weight = len(other_key_columns) - i if i < len(other_key_columns) else 0.5
-            weighted_values.append(f"{weight}:{val}")
-        
-        return '||'.join(weighted_values)
+    # Track differences
+    differences = []
     
-    # Create hash values for both dataframes with error handling
-    try:
-        df1['_row_hash'] = df1.apply(create_row_hash, axis=1)
-        df2['_row_hash'] = df2.apply(create_row_hash, axis=1)
-    except Exception as e:
-        # エラーが発生した場合は、インデックスをハッシュとして使用
-        df1['_row_hash'] = df1.index.astype(str)
-        df2['_row_hash'] = df2.index.astype(str)
+    # Compare rows
+    df1['_row_hash'] = df1[common_cols].apply(lambda x: hash(tuple(x)), axis=1)
+    df2['_row_hash'] = df2[common_cols].apply(lambda x: hash(tuple(x)), axis=1)
     
-    # Initialize tracking sets
-    matched_df1_indices = set()
-    matched_df2_indices = set()
-    
-    # First pass: Find exact matches using hash values
-    hash_map_df2 = {hash_val: idx for idx, hash_val in enumerate(df2['_row_hash'])}
-    
-    for idx1, hash_val in enumerate(df1['_row_hash']):
-        if hash_val in hash_map_df2:
-            idx2 = hash_map_df2[hash_val]
-            if idx2 not in matched_df2_indices:
-                matched_df1_indices.add(idx1)
-                matched_df2_indices.add(idx2)
-                
-                # Check for modifications in matched rows
-                row1, row2 = df1.iloc[idx1], df2.iloc[idx2]
-                for col in common_cols:
-                    val1 = str(row1[col]).strip() if pd.notna(row1[col]) else ''
-                    val2 = str(row2[col]).strip() if pd.notna(row2[col]) else ''
-                    
-                    # No.列の場合は特別な処理
-                    if col.lower().strip() in ['no', 'no.', '番号']:
-                        # No.列の変更は、他の列に変更がある場合のみ記録
-                        continue
-                    
-                    if val1 != val2:
-                        # 実際の変更として記録
-                        df1_styles.append({
-                            'field': col,
-                            'rowIndex': idx1,
-                            'cellClass': 'ag-cell-modified'
-                        })
-                        df2_styles.append({
-                            'field': col,
-                            'rowIndex': idx2,
-                            'cellClass': 'ag-cell-modified'
-                        })
-                        differences.append({
-                            'type': 'modified',
-                            'column': col,
-                            'row_index_old': idx1,
-                            'row_index_new': idx2,
-                            'value_old': val1,
-                            'value_new': val2
-                        })
-    
-    # Second pass: Handle remaining rows using similarity matching
-    def calculate_row_similarity(row1, row2):
-        """Calculate similarity between two rows with improved matching logic"""
-        matches = 0
-        total_weight = 0
-        no_column_differences = []  # No.列の差分を追跡
+    # Find modified rows
+    for idx1, row1 in df1.iterrows():
+        hash1 = row1['_row_hash']
+        matching_rows = df2[df2['_row_hash'] == hash1]
         
-        def calculate_string_similarity(s1, s2):
-            """文字列の類似度を計算（レーベンシュタイン距離ベース）"""
-            if not s1 and not s2:  # 両方空の場合
-                return 1.0
-            if not s1 or not s2:  # どちらかが空の場合
-                return 0.0
-                
-            # 文字列を正規化
-            s1 = str(s1).strip().lower()
-            s2 = str(s2).strip().lower()
-            
-            if s1 == s2:
-                return 1.0
-                
-            # 簡易的なレーベンシュタイン距離の計算
-            len_s1, len_s2 = len(s1), len(s2)
-            if len_s1 < len_s2:
-                s1, s2 = s2, s1
-                len_s1, len_s2 = len_s2, len_s1
-            
-            # 文字の一致度を計算
-            matches = sum(1 for i in range(min(len_s1, len_s2)) if s1[i] == s2[i])
-            return matches / max(len_s1, len_s2)
-        
-        def calculate_numeric_similarity(v1, v2):
-            """数値の類似度を計算"""
-            try:
-                if pd.isna(v1) and pd.isna(v2):
-                    return 1.0
-                if pd.isna(v1) or pd.isna(v2):
-                    return 0.0
-                
-                n1 = float(v1)
-                n2 = float(v2)
-                
-                if n1 == n2:
-                    return 1.0
-                    
-                # 数値の差に基づく類似度
-                max_val = max(abs(n1), abs(n2))
-                if max_val == 0:
-                    return 1.0
-                    
-                diff_ratio = abs(n1 - n2) / max_val
-                return max(0, 1 - diff_ratio)
-            except (ValueError, TypeError):
-                return 0.0
-        
-        for col in common_cols:
-            # No.列の特別処理
-            is_no_col = col.lower().strip() in ['no', 'no.', '番号']
-            
-            # キー列により高い重みを設定（No.列は低い重みに）
-            if is_no_col:
-                weight = 0.1
-            else:
-                weight = 3.0 if col in key_columns[:2] else 2.0 if col in key_columns else 1.0
-            
-            total_weight += weight
-            val1 = row1[col]
-            val2 = row2[col]
-            
-            # No.列の差分を追跡
-            if is_no_col and val1 != val2:
-                no_column_differences.append((col, val1, val2))
-            
-            # 数値型の場合
-            if pd.api.types.is_numeric_dtype(type(val1)) or pd.api.types.is_numeric_dtype(type(val2)):
-                similarity = calculate_numeric_similarity(val1, val2)
-            else:
-                # 文字列型の場合
-                similarity = calculate_string_similarity(val1, val2)
-            
-            matches += weight * similarity
-        
-        return matches / total_weight if total_weight > 0 else 0
-    
-    # Process unmatched rows with similarity matching
-    unmatched_df1 = [i for i in range(len(df1)) if i not in matched_df1_indices]
-    unmatched_df2 = [i for i in range(len(df2)) if i not in matched_df2_indices]
-    
-    similarity_threshold = 0.8
-    
-    for idx1 in unmatched_df1:
-        best_match = None
-        best_similarity = similarity_threshold
-        row1 = df1.iloc[idx1]
-        
-        for idx2 in unmatched_df2:
-            row2 = df2.iloc[idx2]
-            similarity = calculate_row_similarity(row1, row2)
-            
-            if similarity > best_similarity:
-                best_similarity = similarity
-                best_match = idx2
-        
-        if best_match is not None:
-            # Found a similar row
-            matched_df1_indices.add(idx1)
-            matched_df2_indices.add(best_match)
-            
-            # Mark modified cells
-            row2 = df2.iloc[best_match]
+        if len(matching_rows) == 0:
+            # Row was deleted
+            differences.append({
+                'type': 'deleted',
+                'row_index': idx1,
+                'values': row1[common_cols].to_dict()
+            })
+            # Style deleted row
+            for col in df1.columns:
+                if col != '_row_hash':
+                    df1_styles[col][idx1] = '#F8D7DA'
+        else:
+            # Row exists in both, check for modifications
+            idx2 = matching_rows.index[0]
             for col in common_cols:
-                val1 = str(row1[col]).strip() if pd.notna(row1[col]) else ''
-                val2 = str(row2[col]).strip() if pd.notna(row2[col]) else ''
-                if val1 != val2:
-                    df1_styles.append({
-                        'field': col,
-                        'rowIndex': idx1,
-                        'cellClass': 'ag-cell-modified'
-                    })
-                    df2_styles.append({
-                        'field': col,
-                        'rowIndex': best_match,
-                        'cellClass': 'ag-cell-modified'
-                    })
+                if row1[col] != matching_rows.iloc[0][col]:
                     differences.append({
                         'type': 'modified',
                         'column': col,
                         'row_index_old': idx1,
-                        'row_index_new': best_match,
-                        'value_old': val1,
-                        'value_new': val2,
-                        'similarity': best_similarity
+                        'row_index_new': idx2,
+                        'value_old': row1[col],
+                        'value_new': matching_rows.iloc[0][col]
                     })
-        else:
-            # No similar row found - this row was deleted
-            row = df1.iloc[idx1]
-            for col in common_cols:
-                if pd.notna(row[col]):
-                    df1_styles.append({
-                        'field': col,
-                        'rowIndex': idx1,
-                        'cellClass': 'ag-cell-deleted'
-                    })
-            differences.append({
-                'type': 'deleted',
-                'row_index': idx1,
-                'values': row[common_cols].to_dict()
-            })
+                    df1_styles[col][idx1] = '#FFF3CD'
+                    df2_styles[col][idx2] = '#FFF3CD'
     
-    # Mark remaining unmatched rows in df2 as added
-    for idx2 in range(len(df2)):
-        if idx2 not in matched_df2_indices:
-            row = df2.iloc[idx2]
-            for col in common_cols:
-                if pd.notna(row[col]):
-                    df2_styles.append({
-                        'field': col,
-                        'rowIndex': idx2,
-                        'cellClass': 'ag-cell-added'
-                    })
+    # Find added rows
+    for idx2, row2 in df2.iterrows():
+        hash2 = row2['_row_hash']
+        if len(df1[df1['_row_hash'] == hash2]) == 0:
+            # Row was added
             differences.append({
                 'type': 'added',
                 'row_index': idx2,
-                'values': row[common_cols].to_dict()
+                'values': row2[common_cols].to_dict()
             })
+            # Style added row
+            for col in df2.columns:
+                if col != '_row_hash':
+                    df2_styles[col][idx2] = '#D4EDDA'
     
     # Remove temporary hash columns
     if '_row_hash' in df1_result.columns:
