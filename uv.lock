@@ -694,7 +694,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "streamlit", specifier = ">=1.40.2" },
     { name = "streamlit-aggrid", specifier = ">=1.0.5" },
-    { name = "xlwings", specifier = ">=0.33.4" },
+    { name = "xlwings", specifier = ">=0.30.12" },
 ]
 
 [[package]]

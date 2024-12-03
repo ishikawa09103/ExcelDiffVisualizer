@@ -4,7 +4,9 @@ from st_aggrid import AgGrid, GridOptionsBuilder
 import comparison
 import utils
 import styles
-from openpyxl import load_workbook
+import xlwings as xw
+import tempfile
+import os
 
 st.set_page_config(
     page_title="Excel Comparison Tool",
@@ -61,20 +63,30 @@ def main():
 
         if file1 and file2:
             try:
-                # Load workbooks with error handling using openpyxl
+                # Save uploaded files to temporary locations
                 try:
-                    wb1 = load_workbook(file1)
-                    wb2 = load_workbook(file2)
-                except Exception as e:
-                    st.session_state.upload_error = f"Excelファイルの読み込み中にエラーが発生しました: {str(e)}"
-                    st.error(st.session_state.upload_error)
-                    return
-                
-                # Get and validate sheet names
-                try:
-                    # Get sheet names using openpyxl
-                    sheets1 = wb1.sheetnames
-                    sheets2 = wb2.sheetnames
+                    temp_dir = tempfile.mkdtemp()
+                    file1_path = os.path.join(temp_dir, "file1.xlsx")
+                    file2_path = os.path.join(temp_dir, "file2.xlsx")
+                    
+                    with open(file1_path, 'wb') as f:
+                        f.write(file1.getvalue())
+                    with open(file2_path, 'wb') as f:
+                        f.write(file2.getvalue())
+                    
+                    # Get workbook information using xlwings
+                    app = xw.App(visible=False)
+                    wb1 = app.books.open(file1_path)
+                    wb2 = app.books.open(file2_path)
+                    
+                    # Get sheet names
+                    sheets1 = [sheet.name for sheet in wb1.sheets]
+                    sheets2 = [sheet.name for sheet in wb2.sheets]
+                    
+                    # Close workbooks
+                    wb1.close()
+                    wb2.close()
+                    app.quit()
                     
                     if not sheets1 or not sheets2:
                         st.error("有効なシートが見つかりません。")
