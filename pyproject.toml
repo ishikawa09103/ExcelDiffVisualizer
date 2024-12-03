@@ -9,4 +9,5 @@ dependencies = [
     "pandas>=2.2.3",
     "streamlit-aggrid>=1.0.5",
     "streamlit>=1.40.2",
+    "lxml>=4.9.3",  # XML解析用
 ]

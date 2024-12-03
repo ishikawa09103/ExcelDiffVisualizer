@@ -1,6 +1,10 @@
 import pandas as pd
 import streamlit as st
 import numpy as np
+import zipfile
+import os
+from lxml import etree
+import tempfile
 from openpyxl import load_workbook
 from openpyxl.drawing.spreadsheet_drawing import SpreadsheetDrawing, AnchorMarker
 from openpyxl.drawing.image import Image
@@ -70,48 +74,70 @@ def extract_shape_info(wb_path, sheet_name):
     shapes_info = []
     
     try:
-        wb = load_workbook(wb_path)
-        ws = wb[sheet_name]
-        
-        # 図形の検出
-        if hasattr(ws, '_drawing'):
-            for shape in ws._drawing.shapes:
-                shape_info = {
-                    'type': getattr(shape, 'type', 'unknown'),
-                    'x': getattr(shape, 'left', 0),
-                    'y': getattr(shape, 'top', 0),
-                    'width': getattr(shape, 'width', None),
-                    'height': getattr(shape, 'height', None),
-                    'name': getattr(shape, 'name', '')
-                }
+        # 一時ディレクトリの作成
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # ExcelファイルをZIPとして解凍
+            with zipfile.ZipFile(wb_path, 'r') as zip_ref:
+                zip_ref.extractall(temp_dir)
+            
+            # drawings フォルダのパス
+            drawings_dir = os.path.join(temp_dir, 'xl', 'drawings')
+            
+            # drawing*.xmlファイルを検索
+            if os.path.exists(drawings_dir):
+                for file in os.listdir(drawings_dir):
+                    if file.startswith('drawing') and file.endswith('.xml'):
+                        drawing_path = os.path.join(drawings_dir, file)
+                        
+                        # XMLファイルを解析
+                        tree = etree.parse(drawing_path)
+                        root = tree.getroot()
+                        
+                        # 名前空間の取得
+                        nsmap = root.nsmap
+                        
+                        # 図形情報の抽出
+                        for shape in root.findall('.//xdr:twoCellAnchor', namespaces=nsmap):
+                            try:
+                                # 位置情報の取得
+                                from_elem = shape.find('.//xdr:from', namespaces=nsmap)
+                                to_elem = shape.find('.//xdr:to', namespaces=nsmap)
+                                
+                                if from_elem is not None and to_elem is not None:
+                                    x = int(from_elem.find('.//xdr:col', namespaces=nsmap).text)
+                                    y = int(from_elem.find('.//xdr:row', namespaces=nsmap).text)
+                                    
+                                    # 図形の種類を判定
+                                    shape_type = 'unknown'
+                                    if shape.find('.//xdr:pic', namespaces=nsmap) is not None:
+                                        shape_type = 'image'
+                                    elif shape.find('.//xdr:sp', namespaces=nsmap) is not None:
+                                        shape_type = 'shape'
+                                    
+                                    # 図形情報の保存
+                                    shape_info = {
+                                        'type': shape_type,
+                                        'x': x,
+                                        'y': y,
+                                        'width': int(to_elem.find('.//xdr:col', namespaces=nsmap).text) - x,
+                                        'height': int(to_elem.find('.//xdr:row', namespaces=nsmap).text) - y
+                                    }
+                                    
+                                    # テキスト情報の取得（存在する場合）
+                                    text_elem = shape.find('.//xdr:txBody//a:t', namespaces=nsmap)
+                                    if text_elem is not None:
+                                        shape_info['text'] = text_elem.text
+                                    
+                                    shapes_info.append(shape_info)
+                                    st.write(f"図形を検出: {shape_type} at ({x}, {y})")
+                            except Exception as e:
+                                st.warning(f"図形の解析中にエラー: {str(e)}")
+                                continue
                 
-                if hasattr(shape, 'text'):
-                    shape_info['text'] = shape.text
-                    
-                shapes_info.append(shape_info)
-                st.write(f"図形を検出: {shape_info['name']}")
-        
-        # 検出結果のサマリー表示
-        st.write("\n図形検出サマリー:")
-        st.write(f"合計検出数: {len(shapes_info)}")
-        
-        # 種類別の集計
-        type_counts = {}
-        for shape in shapes_info:
-            shape_type = shape['type']
-            type_counts[shape_type] = type_counts.get(shape_type, 0) + 1
-        
-        for shape_type, count in type_counts.items():
-            st.write(f"- {shape_type}: {count}個")
-        
-        wb.close()
-        
+            st.write(f"検出された図形の総数: {len(shapes_info)}")
+            
     except Exception as e:
         st.error(f"図形検出中にエラーが発生: {str(e)}")
-        try:
-            if 'wb' in locals(): wb.close()
-        except:
-            pass
     
     return shapes_info
 
