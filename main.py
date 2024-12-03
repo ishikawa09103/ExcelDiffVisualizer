@@ -195,8 +195,8 @@ def main():
                         all_summary_data = []
                         
                         for result in all_comparison_results:
-                            sheet1_name = result.get('sheet1_name', f'Sheet1_{i+1}')
-                            sheet2_name = result.get('sheet2_name', f'Sheet2_{i+1}')
+                            sheet1_name = result.get('sheet1_name', 'Unknown Sheet 1')
+                            sheet2_name = result.get('sheet2_name', 'Unknown Sheet 2')
                             sheet_pair = f"{sheet1_name} → {sheet2_name}"
                             
                             # データの変更を処理
