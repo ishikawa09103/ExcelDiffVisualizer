@@ -157,7 +157,7 @@ def compare_shapes(shapes1, shapes2):
                     shape1.get('height') != shape2.get('height') or 
                     shape1.get('text') != shape2.get('text')):
                     differences.append({
-                        'type': 'modified',
+                        'type': '変更',
                         'shape_index': idx2,
                         'old_shape': shape1,
                         'new_shape': shape2
@@ -166,7 +166,7 @@ def compare_shapes(shapes1, shapes2):
         
         if not found_match:
             differences.append({
-                'type': 'added',
+                'type': '追加',
                 'shape_index': idx2,
                 'shape': shape2
             })
@@ -183,7 +183,7 @@ def compare_shapes(shapes1, shapes2):
         
         if not found_match:
             differences.append({
-                'type': 'deleted',
+                'type': '削除',
                 'shape_index': idx1,
                 'shape': shape1
             })
@@ -336,7 +336,7 @@ def compare_dataframes(df1, df2):
                             'cellClass': 'ag-cell-modified'
                         })
                         differences.append({
-                            'type': 'modified',
+                            'type': '変更',
                             'column': col,
                             'row_index_old': idx1,
                             'row_index_new': idx2,
@@ -469,7 +469,7 @@ def compare_dataframes(df1, df2):
                         'cellClass': 'ag-cell-modified'
                     })
                     differences.append({
-                        'type': 'modified',
+                        'type': '変更',
                         'column': col,
                         'row_index_old': idx1,
                         'row_index_new': best_match,

@@ -249,7 +249,7 @@ def export_comparison(comparison_results, sheets1, sheets2):
                 for shape_diff in result['shape_differences']:
                     shape_info = {
                         'シート名': sheet_pair,
-                        '変更タイプ': f'図形{shape_diff["type"]}'
+                        '変更タイプ': f'図形{shape_diff["type"] if shape_diff["type"] in ["追加", "削除", "変更"] else "変更"}'
                     }
                     
                     if shape_diff['type'] == 'modified':
