@@ -26,50 +26,78 @@ def get_excel_range_reference(row_index, start_col_index, end_col_index):
     return f"{start_ref}:{end_ref}"
 
 def create_grid(df, cell_styles=None):
-    gb = GridOptionsBuilder.from_dataframe(df)
-    
-    # Configure default column behavior
-    gb.configure_default_column(
-        resizable=True,
-        filterable=True,
-        sorteable=True,
-        editable=False
-    )
-    
-    # Add cell styling if provided
-    if cell_styles:
-        # Create JavaScript function for cell styling
-        cell_style_jscode = JsCode("""
+    try:
+        gb = GridOptionsBuilder.from_dataframe(df)
+        
+        # Configure default column behavior
+        gb.configure_default_column(
+            resizable=True,
+            filterable=True,
+            sorteable=True,
+            editable=False,
+            suppressMovable=True  # Prevent column reordering to avoid unhandled rejections
+        )
+        
+        # Add cell styling if provided
+        if cell_styles:
+            # Create JavaScript function for cell styling with error handling
+            cell_style_jscode = JsCode("""
+            function(params) {
+                try {
+                    return {
+                        'backgroundColor': params.data && params.data._cellStyles ? params.data._cellStyles[params.column.colId] : null
+                    };
+                } catch (e) {
+                    console.warn('Cell style error:', e);
+                    return null;
+                }
+            }
+            """)
+            
+            gb.configure_grid_options(
+                getRowStyle=None,
+                getCellStyle=cell_style_jscode,
+                onGridReady=JsCode("""
+                function(params) {
+                    params.api.sizeColumnsToFit();
+                }
+                """)
+            )
+        
+        grid_options = gb.build()
+        
+        # Add custom cell styling configuration
+        if cell_styles:
+            grid_options['context'] = {'cell_styles': cell_styles}
+            
+        # Add error handling for grid events
+        grid_options['onGridReady'] = JsCode("""
         function(params) {
-            return {
-                'backgroundColor': params.data._cellStyles ? params.data._cellStyles[params.column.colId] : null
-            };
+            try {
+                params.api.sizeColumnsToFit();
+            } catch (e) {
+                console.warn('Grid ready error:', e);
+            }
         }
         """)
         
-        gb.configure_grid_options(
-            getRowStyle=None,
-            getCellStyle=cell_style_jscode
+        return AgGrid(
+            df,
+            gridOptions=grid_options,
+            update_mode='VALUE_CHANGED',  # Changed from MODEL_CHANGED to reduce rejections
+            allow_unsafe_jscode=True,
+            theme='streamlit',
+            custom_css={
+                ".ag-cell-added": {"backgroundColor": "#D4EDDA !important"},
+                ".ag-cell-deleted": {"backgroundColor": "#F8D7DA !important"},
+                ".ag-cell-modified": {"backgroundColor": "#FFF3CD !important"}
+            },
+            key=f"grid_{id(df)}"  # Add unique key for each grid
         )
-    
-    grid_options = gb.build()
-    
-    # Add custom cell styling configuration
-    if cell_styles:
-        grid_options['context'] = {'cell_styles': cell_styles}
-    
-    return AgGrid(
-        df,
-        gridOptions=grid_options,
-        update_mode='MODEL_CHANGED',
-        allow_unsafe_jscode=True,
-        theme='streamlit',
-        custom_css={
-            ".ag-cell-added": {"backgroundColor": "#D4EDDA !important"},
-            ".ag-cell-deleted": {"backgroundColor": "#F8D7DA !important"},
-            ".ag-cell-modified": {"backgroundColor": "#FFF3CD !important"}
-        }
-    )
+    except Exception as e:
+        st.error(f"グリッドの作成中にエラーが発生しました: {str(e)}")
+        # Fallback to basic DataFrame display
+        return st.dataframe(df)
 
 def display_shape_differences(shape_differences):
     """
