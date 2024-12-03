@@ -4,7 +4,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder
 import comparison
 import utils
 import styles
-from openpyxl import load_workbook
+import xlwings as xw
 
 st.set_page_config(
     page_title="Excel Comparison Tool",
@@ -61,10 +61,24 @@ def main():
 
         if file1 and file2:
             try:
-                # Load workbooks with error handling
+                # Load workbooks with error handling using xlwings
                 try:
-                    wb1 = load_workbook(file1)
-                    wb2 = load_workbook(file2)
+                    # Save uploaded files to temporary locations
+                    import tempfile
+                    import os
+                    
+                    temp_dir = tempfile.mkdtemp()
+                    file1_path = os.path.join(temp_dir, "file1.xlsx")
+                    file2_path = os.path.join(temp_dir, "file2.xlsx")
+                    
+                    with open(file1_path, 'wb') as f:
+                        f.write(file1.getvalue())
+                    with open(file2_path, 'wb') as f:
+                        f.write(file2.getvalue())
+                    
+                    # Use xlwings to open the workbooks
+                    wb1 = file1_path
+                    wb2 = file2_path
                 except Exception as e:
                     st.session_state.upload_error = f"Excelファイルの読み込み中にエラーが発生しました: {str(e)}"
                     st.error(st.session_state.upload_error)
@@ -72,8 +86,18 @@ def main():
                 
                 # Get and validate sheet names
                 try:
-                    sheets1 = wb1.sheetnames
-                    sheets2 = wb2.sheetnames
+                    # Get sheet names using xlwings
+                    app = xw.App(visible=False)
+                    wb1_xw = app.books.open(wb1)
+                    wb2_xw = app.books.open(wb2)
+                    
+                    sheets1 = [sheet.name for sheet in wb1_xw.sheets]
+                    sheets2 = [sheet.name for sheet in wb2_xw.sheets]
+                    
+                    # Close xlwings workbooks
+                    wb1_xw.close()
+                    wb2_xw.close()
+                    app.quit()
                     
                     if not sheets1 or not sheets2:
                         st.error("有効なシートが見つかりません。")
