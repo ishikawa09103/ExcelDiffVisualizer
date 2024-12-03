@@ -230,8 +230,7 @@ def main():
                         # Export options for all sheets
                         st.markdown("---")
                         st.subheader("エクスポート")
-                        for result in all_comparison_results:
-                            utils.export_comparison(result, result['sheet1_name'], result['sheet2_name'])
+                        utils.export_comparison(all_comparison_results)
                     
                 except Exception as e:
                     st.error(f"比較処理中にエラーが発生しました: {str(e)}")

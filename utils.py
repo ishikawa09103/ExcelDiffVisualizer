@@ -35,12 +35,11 @@ def create_grid(df, cell_styles=None):
             filterable=True,
             sorteable=True,
             editable=False,
-            suppressMovable=True  # Prevent column reordering to avoid unhandled rejections
+            suppressMovable=True
         )
         
         # Add cell styling if provided
         if cell_styles:
-            # Create JavaScript function for cell styling with error handling
             cell_style_jscode = JsCode("""
             function(params) {
                 try {
@@ -66,11 +65,9 @@ def create_grid(df, cell_styles=None):
         
         grid_options = gb.build()
         
-        # Add custom cell styling configuration
         if cell_styles:
             grid_options['context'] = {'cell_styles': cell_styles}
             
-        # Add error handling for grid events
         grid_options['onGridReady'] = JsCode("""
         function(params) {
             try {
@@ -84,7 +81,7 @@ def create_grid(df, cell_styles=None):
         return AgGrid(
             df,
             gridOptions=grid_options,
-            update_mode='VALUE_CHANGED',  # Changed from MODEL_CHANGED to reduce rejections
+            update_mode='VALUE_CHANGED',
             allow_unsafe_jscode=True,
             theme='streamlit',
             custom_css={
@@ -92,11 +89,10 @@ def create_grid(df, cell_styles=None):
                 ".ag-cell-deleted": {"backgroundColor": "#F8D7DA !important"},
                 ".ag-cell-modified": {"backgroundColor": "#FFF3CD !important"}
             },
-            key=f"grid_{id(df)}"  # Add unique key for each grid
+            key=f"grid_{id(df)}"
         )
     except Exception as e:
         st.error(f"グリッドの作成中にエラーが発生しました: {str(e)}")
-        # Fallback to basic DataFrame display
         return st.dataframe(df)
 
 def display_shape_differences(shape_differences):
@@ -106,12 +102,8 @@ def display_shape_differences(shape_differences):
     st.write("画像の差分処理を開始...")
     
     for diff in shape_differences:
-        st.write(f"処理中の差分タイプ: {diff['type']}")
-        st.write(f"差分の内容: {diff}")
-        
         if diff['type'] == 'added':
             shape = diff.get('shape', {})
-            st.write(f"追加された形状の情報: {shape}")
             if shape.get('type') == 'image':
                 try:
                     st.markdown(f"🟢 **追加された画像:**")
@@ -125,7 +117,6 @@ def display_shape_differences(shape_differences):
                     st.error(f"画像情報の表示中にエラー: {str(e)}")
         elif diff['type'] == 'deleted':
             shape = diff.get('shape', {})
-            st.write(f"削除された形状の情報: {shape}")
             if shape.get('type') == 'image':
                 try:
                     st.markdown(f"🔴 **削除された画像:**")
@@ -144,11 +135,8 @@ def display_shape_differences(shape_differences):
                 - テキスト: {shape.get('text', '') or 'なし'}
                 """)
         else:  # modified
-            st.write("変更された形状の情報:")
             old_shape = diff.get('old_shape', {})
             new_shape = diff.get('new_shape', {})
-            st.write(f"変更前: {old_shape}")
-            st.write(f"変更後: {new_shape}")
             
             st.markdown(f"🟡 **変更された要素:**")
             col1, col2 = st.columns(2)
@@ -190,78 +178,120 @@ def display_shape_differences(shape_differences):
                 except Exception as e:
                     st.error(f"変更後の情報表示中にエラー: {str(e)}")
 
-def export_comparison(comparison_result, sheet1_name=None, sheet2_name=None):
+def export_comparison(comparison_results):
     """
-    Export comparison results including shape differences and sheet names
+    Export comparison results for all sheets in a single Excel file
+    comparison_results: List of comparison result dictionaries, each containing df1, df2, diff_summary, etc.
     """
     output = io.BytesIO()
     
-    # Create Excel writer object
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # Write data differences with sheet names
-        sheet1_label = f'File1_{sheet1_name}' if sheet1_name else 'File1'
-        sheet2_label = f'File2_{sheet2_name}' if sheet2_name else 'File2'
-        
-        # シート名が長すぎる場合は短縮
-        max_length = 31  # Excelのシート名の最大長は31文字
-        if len(sheet1_label) > max_length:
-            sheet1_label = sheet1_label[:max_length]
-        if len(sheet2_label) > max_length:
-            sheet2_label = sheet2_label[:max_length]
+        # 各シートのデータ出力
+        for i, result in enumerate(comparison_results):
+            sheet1_name = result.get('sheet1_name', f'Sheet1_{i+1}')
+            sheet2_name = result.get('sheet2_name', f'Sheet2_{i+1}')
             
-        comparison_result['df1'].to_excel(writer, sheet_name=sheet1_label, index=False)
-        comparison_result['df2'].to_excel(writer, sheet_name=sheet2_label, index=False)
-        # Create a more detailed summary DataFrame with Excel-style cell references
-        summary_data = []
-        for diff in comparison_result['diff_summary'].to_dict('records'):
-            if diff['type'] == 'modified':
-                col_idx = comparison_result['df1'].columns.get_loc(diff['column'])
-                cell_ref_old = get_excel_cell_reference(col_idx, diff['row_index_old'])
-                cell_ref_new = get_excel_cell_reference(col_idx, diff['row_index_new'])
-                summary_data.append({
-                    '変更タイプ': '変更',
-                    'セル位置 (変更前)': cell_ref_old,
-                    'セル位置 (変更後)': cell_ref_new,
-                    '変更前の値': diff['value_old'],
-                    '変更後の値': diff['value_new'],
-                    '類似度': f"{diff.get('similarity', 1.0):.2%}"
-                })
-            else:
-                row_idx = diff['row_index']
-                df = comparison_result['df1']
-                range_ref = get_excel_range_reference(row_idx, 0, len(df.columns) - 1)
-                row_values = []
-                for col in df.columns:
-                    val = diff['values'].get(col, '')
-                    if pd.notna(val):
-                        row_values.append(f"{col}: {val}")
-                
-                summary_data.append({
-                    '変更タイプ': '行追加' if diff['type'] == 'added' else '削除',
-                    'セル位置': f"{row_idx + 1}行目 ({range_ref})",
-                    '値': ' | '.join(row_values),
-                    '類似度': 'N/A'
-                })
+            # シート名を適切な形式に変換
+            sheet1_label = f'File1_{sheet1_name}'
+            sheet2_label = f'File2_{sheet2_name}'
+            
+            # シート名の長さ制限（31文字）
+            max_length = 31
+            if len(sheet1_label) > max_length:
+                sheet1_label = f'F1_{sheet1_name[:max_length-4]}'
+            if len(sheet2_label) > max_length:
+                sheet2_label = f'F2_{sheet2_name[:max_length-4]}'
+            
+            # データフレームを出力
+            result['df1'].to_excel(writer, sheet_name=sheet1_label, index=False)
+            result['df2'].to_excel(writer, sheet_name=sheet2_label, index=False)
         
-        summary_df = pd.DataFrame(summary_data)
-        if not summary_df.empty:
-            # シート名でソート可能にするために列の順序を調整
-            columns_order = ['シート名', '変更タイプ', 'セル位置', 'セル位置 (変更前)', 'セル位置 (変更後)', '値', '変更前の値', '変更後の値']
+        # 全シートのサマリーを作成
+        all_summary_data = []
+        for result in comparison_results:
+            sheet1_name = result.get('sheet1_name', '')
+            sheet2_name = result.get('sheet2_name', '')
+            sheet_pair = f"{sheet1_name} → {sheet2_name}"
+            
+            # データの変更を処理
+            for diff in result['diff_summary'].to_dict('records'):
+                if diff['type'] == 'modified':
+                    col_idx = result['df1'].columns.get_loc(diff['column'])
+                    cell_ref_old = get_excel_cell_reference(col_idx, diff['row_index_old'])
+                    cell_ref_new = get_excel_cell_reference(col_idx, diff['row_index_new'])
+                    
+                    all_summary_data.append({
+                        'シート名': sheet_pair,
+                        '変更タイプ': 'データ変更',
+                        'セル位置 (変更前)': cell_ref_old,
+                        'セル位置 (変更後)': cell_ref_new,
+                        '変更前の値': diff['value_old'],
+                        '変更後の値': diff['value_new'],
+                        '類似度': f"{diff.get('similarity', 1.0):.2%}"
+                    })
+                else:
+                    df = result['df1'] if diff['type'] == 'deleted' else result['df2']
+                    row_idx = diff['row_index']
+                    range_ref = get_excel_range_reference(row_idx, 0, len(df.columns) - 1)
+                    
+                    row_values = []
+                    for col in df.columns:
+                        val = diff['values'].get(col, '')
+                        if pd.notna(val):
+                            row_values.append(f"{col}: {val}")
+                    
+                    all_summary_data.append({
+                        'シート名': sheet_pair,
+                        '変更タイプ': '行追加' if diff['type'] == 'added' else '行削除',
+                        'セル位置': f"{row_idx + 1}行目 ({range_ref})",
+                        '値': ' | '.join(row_values),
+                        '類似度': 'N/A'
+                    })
+            
+            # 図形の変更を処理
+            if 'shape_differences' in result:
+                for shape_diff in result['shape_differences']:
+                    shape_info = {
+                        'シート名': sheet_pair,
+                        '変更タイプ': f'図形{shape_diff["type"]}',
+                        'セル位置': '',
+                        '値': ''
+                    }
+                    
+                    if shape_diff['type'] == 'modified':
+                        old_shape = shape_diff['old_shape']
+                        new_shape = shape_diff['new_shape']
+                        shape_info.update({
+                            'セル位置 (変更前)': get_excel_cell_reference(old_shape['x'], old_shape['y']),
+                            'セル位置 (変更後)': get_excel_cell_reference(new_shape['x'], new_shape['y']),
+                            '変更前の値': f"Type: {old_shape['type']}, Text: {old_shape.get('text', '')}",
+                            '変更後の値': f"Type: {new_shape['type']}, Text: {new_shape.get('text', '')}"
+                        })
+                    else:
+                        shape = shape_diff.get('shape', {})
+                        shape_info.update({
+                            'セル位置': get_excel_cell_reference(shape['x'], shape['y']),
+                            '値': f"Type: {shape['type']}, Text: {shape.get('text', '')}"
+                        })
+                    
+                    all_summary_data.append(shape_info)
+        
+        # サマリーデータフレームを作成して出力
+        if all_summary_data:
+            summary_df = pd.DataFrame(all_summary_data)
+            # 列の順序を整理
+            columns_order = ['シート名', '変更タイプ', 'セル位置', 'セル位置 (変更前)', 
+                           'セル位置 (変更後)', '値', '変更前の値', '変更後の値', '類似度']
             existing_columns = [col for col in columns_order if col in summary_df.columns]
             other_columns = [col for col in summary_df.columns if col not in columns_order]
             summary_df = summary_df[existing_columns + other_columns]
-            summary_df.to_excel(writer, sheet_name='Data_Summary', index=False)
-        
-        # Write shape differences
-        if 'shape_differences' in comparison_result:
-            shape_diff_df = pd.DataFrame(comparison_result['shape_differences'])
-            if not shape_diff_df.empty:
-                shape_diff_df.to_excel(writer, sheet_name='Shape_Differences', index=False)
+            
+            summary_df.to_excel(writer, sheet_name='Summary', index=False)
     
-    # Prepare the file for download
+    # ファイルをダウンロード可能な状態にする
     output.seek(0)
     
-    # Create download button
+    # ダウンロードボタンを作成
     st.download_button(
         label="比較レポートをダウンロード",
         data=output,
