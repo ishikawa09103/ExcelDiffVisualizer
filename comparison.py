@@ -75,17 +75,22 @@ def extract_shape_info(wb, sheet_name):
     try:
         ws = wb[sheet_name]
         
-        # 1. SpreadsheetDrawing オブジェクトの検出
+        # 1. SpreadsheetDrawing オブジェクトの検出とデバッグ情報の出力
         st.write("1. SpreadsheetDrawing オブジェクトの検索...")
         if hasattr(ws, '_drawing'):
+            st.write("_drawingオブジェクトの詳細:")
+            st.write(f"Type: {type(ws._drawing)}")
+            st.write(f"Available attributes: {dir(ws._drawing)}")
+            
             drawing = ws._drawing
             if isinstance(drawing, SpreadsheetDrawing):
                 st.write(f"SpreadsheetDrawing オブジェクトを検出: {drawing}")
                 
-                # 1.1 _shapes から図形を検出
                 if hasattr(drawing, '_shapes'):
-                    st.write("_shapes からの図形検索...")
+                    st.write(f"_shapes count: {len(drawing._shapes)}")
                     for shape in drawing._shapes:
+                        st.write(f"Shape type: {type(shape)}")
+                        st.write(f"Shape attributes: {dir(shape)}")
                         shape_info = _process_drawing(shape, 'shape')
                         if shape_info:
                             shapes_info.append(shape_info)
@@ -99,6 +104,23 @@ def extract_shape_info(wb, sheet_name):
                         if shape_info:
                             shapes_info.append(shape_info)
                             st.write(f"図形を検出: 位置({shape_info['x']}, {shape_info['y']})")
+
+        # Alternative shape detection methods
+        if hasattr(ws, 'shapes'):
+            st.write("Direct shapes property check:")
+            for shape in ws.shapes:
+                st.write(f"Direct shape: {shape}")
+                if hasattr(shape, 'shape_type'):
+                    st.write(f"Shape type: {shape.shape_type}")
+
+        # Check for alternative shape containers
+        for attr in ['_shapes', 'shapes', '_drawing_shapes']:
+            if hasattr(ws, attr):
+                shapes = getattr(ws, attr)
+                st.write(f"Checking {attr}:")
+                st.write(f"Type: {type(shapes)}")
+                if isinstance(shapes, (list, tuple)):
+                    st.write(f"Count: {len(shapes)}")
         
         # 2. 画像オブジェクトの検出
         st.write("2. 画像オブジェクトの検索...")
