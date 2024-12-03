@@ -71,9 +71,8 @@ def extract_shape_info(wb_path, sheet_name):
     shapes_info = []
     
     try:
-        # xlwingsアプリケーションの初期化
-        xw.apps.add()
-        wb = xw.Book(wb_path)
+        # xlwings Readerモードを使用
+        wb = xw.Book(wb_path, mode='r')
         ws = wb.sheets[sheet_name]
         
         # 図形の検出
@@ -96,7 +95,6 @@ def extract_shape_info(wb_path, sheet_name):
         
         # クリーンアップ
         wb.close()
-        xw.apps.active.quit()
         
         # 検出結果のサマリー表示
         st.write("\n図形検出サマリー:")

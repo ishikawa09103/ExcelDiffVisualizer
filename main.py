@@ -74,12 +74,10 @@ def main():
                     with open(file2_path, 'wb') as f:
                         f.write(file2.getvalue())
                     
-                    # Get workbook information using xlwings
+                    # Get workbook information using xlwings Reader mode
                     try:
-                        # xlwingsアプリケーションの初期化
-                        xw.apps.add()
-                        wb1 = xw.Book(file1_path)
-                        wb2 = xw.Book(file2_path)
+                        wb1 = xw.Book(file1_path, mode='r')
+                        wb2 = xw.Book(file2_path, mode='r')
                         
                         # シート名の取得
                         sheets1 = [sheet.name for sheet in wb1.sheets]
@@ -88,15 +86,12 @@ def main():
                         # クリーンアップ
                         wb1.close()
                         wb2.close()
-                        xw.apps.active.quit()
                     except Exception as e:
                         st.error(f"シート情報の取得中にエラーが発生しました: {str(e)}")
                         # エラー発生時のクリーンアップ
                         try:
                             if 'wb1' in locals(): wb1.close()
                             if 'wb2' in locals(): wb2.close()
-                            if xw.apps:
-                                xw.apps.active.quit()
                         except:
                             pass
                         return
