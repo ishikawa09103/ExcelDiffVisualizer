@@ -67,57 +67,67 @@ def _process_drawing(drawing, shape_type='unknown'):
 
 def extract_shape_info(wb, sheet_name):
     """
-    xlwingsを使用してワークシートから図形情報を抽出する関数
+    ワークシートから図形情報を抽出する関数
     """
-    import xlwings as xw
-    
     st.write(f"図形情報の抽出を開始... シート名: {sheet_name}")
     shapes_info = []
     
     try:
-        # xlwingsでワークブックとシートを開く
-        app = xw.App(visible=False)
-        wb_xw = app.books.open(wb)
-        ws = wb_xw.sheets[sheet_name]
+        ws = wb[sheet_name]
+        st.write("1. 図形オブジェクトの検索...")
         
-        st.write("1. シェイプオブジェクトの検索...")
-        shapes = ws.shapes
-        st.write(f"検出されたシェイプの数: {len(shapes)}")
+        # SpreadsheetDrawing からの図形検出
+        if hasattr(ws, '_drawing'):
+            drawing = ws._drawing
+            if isinstance(drawing, SpreadsheetDrawing):
+                st.write("SpreadsheetDrawing オブジェクトを検出")
+                
+                # 図形の処理
+                if hasattr(drawing, '_shapes'):
+                    st.write(f"図形の数: {len(drawing._shapes)}")
+                    for shape in drawing._shapes:
+                        shape_info = _process_drawing(shape, 'shape')
+                        if shape_info:
+                            shapes_info.append(shape_info)
+                            st.write(f"図形を検出: 位置({shape_info['x']}, {shape_info['y']})")
         
-        for shape in shapes:
+        # 画像オブジェクトの検出
+        if hasattr(ws, '_images'):
+            st.write("2. 画像オブジェクトの検索...")
             try:
-                shape_info = {
-                    'type': shape.type,
-                    'x': shape.left,
-                    'y': shape.top,
-                    'width': shape.width,
-                    'height': shape.height,
-                    'text': shape.text if hasattr(shape, 'text') else ''
-                }
-                
-                # シェイプタイプの詳細情報を取得
-                if hasattr(shape, 'shape_type'):
-                    shape_info['shape_type'] = shape.shape_type
-                    
-                # 画像の場合の追加情報
-                if shape.type == 'picture':
-                    shape_info['type'] = 'image'
-                    st.write(f"画像を検出: 位置({shape_info['x']}, {shape_info['y']})")
-                # チャートの場合の追加情報
-                elif shape.type == 'chart':
-                    shape_info['type'] = 'chart'
-                    st.write(f"チャートを検出: 位置({shape_info['x']}, {shape_info['y']})")
-                # その他の図形の場合
-                else:
-                    shape_info['type'] = 'shape'
-                    st.write(f"図形を検出: 位置({shape_info['x']}, {shape_info['y']})")
-                
-                shapes_info.append(shape_info)
-                
+                if isinstance(ws._images, list):
+                    for image in ws._images:
+                        shape_info = _process_drawing(image, 'image')
+                        if shape_info:
+                            shapes_info.append(shape_info)
+                            st.write(f"画像を検出: 位置({shape_info['x']}, {shape_info['y']})")
+                elif hasattr(ws._images, 'items'):
+                    for image_rel_id, image in ws._images.items():
+                        shape_info = _process_drawing(image, 'image')
+                        if shape_info:
+                            shapes_info.append(shape_info)
+                            st.write(f"画像を検出: 位置({shape_info['x']}, {shape_info['y']})")
             except Exception as e:
-                st.warning(f"シェイプの処理中にエラー: {str(e)}")
-                st.write(f"シェイプの種類: {type(shape)}")
-                st.write(f"利用可能な属性: {dir(shape)}")
+                st.warning(f"画像の処理中にエラー: {str(e)}")
+        
+        # チャートオブジェクトの検出
+        if hasattr(ws, '_charts'):
+            st.write("3. チャートオブジェクトの検索...")
+            try:
+                if isinstance(ws._charts, list):
+                    for chart in ws._charts:
+                        shape_info = _process_drawing(chart, 'chart')
+                        if shape_info:
+                            shapes_info.append(shape_info)
+                            st.write(f"チャートを検出: 位置({shape_info['x']}, {shape_info['y']})")
+                elif hasattr(ws._charts, 'items'):
+                    for chart_rel_id, chart in ws._charts.items():
+                        shape_info = _process_drawing(chart, 'chart')
+                        if shape_info:
+                            shapes_info.append(shape_info)
+                            st.write(f"チャートを検出: 位置({shape_info['x']}, {shape_info['y']})")
+            except Exception as e:
+                st.warning(f"チャートの処理中にエラー: {str(e)}")
         
         # 検出結果のサマリー表示
         st.write("\n図形検出サマリー:")
@@ -144,21 +154,13 @@ def extract_shape_info(wb, sheet_name):
                 st.write(f"- テキスト: {shape['text']}")
             if shape.get('shape_type'):
                 st.write(f"- 図形タイプ: {shape['shape_type']}")
-    
+                
     except Exception as e:
         st.error(f"図形検出中にエラーが発生: {str(e)}")
         st.write(f"エラーの種類: {type(e).__name__}")
         import traceback
         st.write("エラーの詳細:")
         st.code(traceback.format_exc())
-    
-    finally:
-        # クリーンアップ
-        try:
-            wb_xw.close()
-            app.quit()
-        except:
-            pass
     
     return shapes_info
 

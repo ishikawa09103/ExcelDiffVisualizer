@@ -9,5 +9,4 @@ dependencies = [
     "pandas>=2.2.3",
     "streamlit-aggrid>=1.0.5",
     "streamlit>=1.40.2",
-    "xlwings>=0.33.4",
 ]
