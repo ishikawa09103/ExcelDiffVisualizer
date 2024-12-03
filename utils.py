@@ -27,72 +27,127 @@ def get_excel_range_reference(row_index, start_col_index, end_col_index):
 
 def create_grid(df, cell_styles=None):
     try:
-        gb = GridOptionsBuilder.from_dataframe(df)
+        # データフレームの検証
+        if not isinstance(df, pd.DataFrame):
+            raise ValueError("無効なデータフレーム形式です")
         
-        # Configure default column behavior
-        gb.configure_default_column(
-            resizable=True,
-            filterable=True,
-            sorteable=True,
-            editable=False,
-            suppressMovable=True
-        )
+        # グリッドビルダーの初期化
+        try:
+            gb = GridOptionsBuilder.from_dataframe(df)
+        except Exception as e:
+            st.error(f"グリッドビルダーの初期化に失敗しました: {str(e)}")
+            return st.dataframe(df)
         
-        # Add cell styling if provided
+        # デフォルトカラム設定
+        try:
+            gb.configure_default_column(
+                resizable=True,
+                filterable=True,
+                sorteable=True,
+                editable=False,
+                suppressMovable=True
+            )
+        except Exception as e:
+            st.error(f"カラム設定中にエラーが発生しました: {str(e)}")
+            return st.dataframe(df)
+        
+        # セルスタイリングの設定
         if cell_styles:
-            cell_style_jscode = JsCode("""
+            try:
+                cell_style_jscode = JsCode("""
+                function(params) {
+                    try {
+                        if (!params.data) return null;
+                        if (!params.column || !params.column.colId) return null;
+                        return {
+                            'backgroundColor': params.data._cellStyles ? 
+                                params.data._cellStyles[params.column.colId] : null
+                        };
+                    } catch (e) {
+                        console.error('セルスタイル適用エラー:', e);
+                        return null;
+                    }
+                }
+                """)
+                
+                # グリッドオプションの設定
+                gb.configure_grid_options(
+                    getRowStyle=None,
+                    getCellStyle=cell_style_jscode
+                )
+            except Exception as e:
+                st.error(f"スタイル設定中にエラーが発生しました: {str(e)}")
+                return st.dataframe(df)
+        
+        try:
+            grid_options = gb.build()
+            
+            if cell_styles:
+                grid_options['context'] = {'cell_styles': cell_styles}
+            
+            # データ更新とグリッド初期化の非同期処理
+            grid_options['onGridReady'] = JsCode("""
             function(params) {
                 try {
-                    return {
-                        'backgroundColor': params.data && params.data._cellStyles ? params.data._cellStyles[params.column.colId] : null
-                    };
+                    if (!params.api) {
+                        console.error('Grid API が利用できません');
+                        return;
+                    }
+                    
+                    // 非同期でのグリッドサイズ調整
+                    setTimeout(() => {
+                        try {
+                            params.api.sizeColumnsToFit();
+                        } catch (e) {
+                            console.error('グリッドサイズ調整エラー:', e);
+                        }
+                    }, 0);
+                    
+                    // データ更新エラーハンドリング
+                    params.api.addEventListener('exception', function(error) {
+                        console.error('データ更新エラー:', error);
+                    });
                 } catch (e) {
-                    console.warn('Cell style error:', e);
-                    return null;
+                    console.error('グリッド初期化エラー:', e);
                 }
             }
             """)
             
-            gb.configure_grid_options(
-                getRowStyle=None,
-                getCellStyle=cell_style_jscode,
-                onGridReady=JsCode("""
-                function(params) {
-                    params.api.sizeColumnsToFit();
+            # データ更新イベントハンドリング
+            grid_options['onCellValueChanged'] = JsCode("""
+            function(params) {
+                try {
+                    if (!params.data) {
+                        console.warn('更新データが見つかりません');
+                        return;
+                    }
+                    console.log('セル更新成功:', params.colDef.field);
+                } catch (e) {
+                    console.error('データ更新処理エラー:', e);
                 }
-                """)
-            )
-        
-        grid_options = gb.build()
-        
-        if cell_styles:
-            grid_options['context'] = {'cell_styles': cell_styles}
-            
-        grid_options['onGridReady'] = JsCode("""
-        function(params) {
-            try {
-                params.api.sizeColumnsToFit();
-            } catch (e) {
-                console.warn('Grid ready error:', e);
             }
-        }
-        """)
-        
-        return AgGrid(
-            df,
-            gridOptions=grid_options,
-            update_mode='VALUE_CHANGED',
-            allow_unsafe_jscode=True,
-            theme='streamlit',
-            custom_css={
-                ".ag-cell-added": {"backgroundColor": "#D4EDDA !important"},
-                ".ag-cell-deleted": {"backgroundColor": "#F8D7DA !important"},
-                ".ag-cell-modified": {"backgroundColor": "#FFF3CD !important"}
-            },
-            key=f"grid_{id(df)}"
-        )
+            """)
+            
+            return AgGrid(
+                df,
+                gridOptions=grid_options,
+                update_mode='VALUE_CHANGED',
+                allow_unsafe_jscode=True,
+                theme='streamlit',
+                custom_css={
+                    ".ag-cell-added": {"backgroundColor": "#D4EDDA !important"},
+                    ".ag-cell-deleted": {"backgroundColor": "#F8D7DA !important"},
+                    ".ag-cell-modified": {"backgroundColor": "#FFF3CD !important"}
+                },
+                key=f"grid_{id(df)}",
+                reload_data=False  # データの再読み込みを防止
+            )
+        except Exception as e:
+            st.error(f"グリッドの作成中にエラーが発生しました: {str(e)}")
+            return st.dataframe(df)
+            
     except Exception as e:
-        st.error(f"グリッドの作成中にエラーが発生しました: {str(e)}")
+        st.error(f"予期せぬエラーが発生しました: {str(e)}")
         return st.dataframe(df)
 
 def display_shape_differences(shape_differences):
