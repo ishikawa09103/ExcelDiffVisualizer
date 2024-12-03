@@ -121,9 +121,9 @@ def main():
                             return
                             
                         st.info("画像の比較を開始...")
-                        shapes1 = comparison.extract_shape_info(wb1, sheet1)
+                        shapes1 = comparison.extract_shape_info(file1_path, sheet1)
                         st.write(f"ファイル1の画像数: {len(shapes1)}")
-                        shapes2 = comparison.extract_shape_info(wb2, sheet2)
+                        shapes2 = comparison.extract_shape_info(file2_path, sheet2)
                         st.write(f"ファイル2の画像数: {len(shapes2)}")
                         shape_differences = comparison.compare_shapes(shapes1, shapes2)
                         
