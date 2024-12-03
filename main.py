@@ -4,7 +4,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder
 import comparison
 import utils
 import styles
-import xlwings as xw
+from openpyxl import load_workbook
 import tempfile
 import os
 
@@ -74,26 +74,20 @@ def main():
                     with open(file2_path, 'wb') as f:
                         f.write(file2.getvalue())
                     
-                    # Get workbook information using xlwings Reader mode
+                    # Get workbook information using openpyxl
                     try:
-                        wb1 = xw.Book(file1_path, mode='r')
-                        wb2 = xw.Book(file2_path, mode='r')
+                        wb1 = load_workbook(file1_path)
+                        wb2 = load_workbook(file2_path)
                         
                         # シート名の取得
-                        sheets1 = [sheet.name for sheet in wb1.sheets]
-                        sheets2 = [sheet.name for sheet in wb2.sheets]
+                        sheets1 = wb1.sheetnames
+                        sheets2 = wb2.sheetnames
                         
                         # クリーンアップ
                         wb1.close()
                         wb2.close()
                     except Exception as e:
                         st.error(f"シート情報の取得中にエラーが発生しました: {str(e)}")
-                        # エラー発生時のクリーンアップ
-                        try:
-                            if 'wb1' in locals(): wb1.close()
-                            if 'wb2' in locals(): wb2.close()
-                        except:
-                            pass
                         return
                     
                     if not sheets1 or not sheets2:

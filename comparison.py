@@ -1,7 +1,6 @@
 import pandas as pd
 import streamlit as st
 import numpy as np
-import xlwings as xw
 from openpyxl import load_workbook
 from openpyxl.drawing.spreadsheet_drawing import SpreadsheetDrawing, AnchorMarker
 from openpyxl.drawing.image import Image
@@ -71,30 +70,26 @@ def extract_shape_info(wb_path, sheet_name):
     shapes_info = []
     
     try:
-        # xlwings Readerモードを使用
-        wb = xw.Book(wb_path, mode='r')
-        ws = wb.sheets[sheet_name]
+        wb = load_workbook(wb_path)
+        ws = wb[sheet_name]
         
         # 図形の検出
-        for shape in ws.shapes:
-            shape_info = {
-                'type': shape.type,
-                'x': shape.left,
-                'y': shape.top,
-                'width': shape.width,
-                'height': shape.height,
-                'name': shape.name
-            }
-            
-            # 図形の種類に応じた追加情報
-            if hasattr(shape, 'text'):
-                shape_info['text'] = shape.text
+        if hasattr(ws, '_drawing'):
+            for shape in ws._drawing.shapes:
+                shape_info = {
+                    'type': getattr(shape, 'type', 'unknown'),
+                    'x': getattr(shape, 'left', 0),
+                    'y': getattr(shape, 'top', 0),
+                    'width': getattr(shape, 'width', None),
+                    'height': getattr(shape, 'height', None),
+                    'name': getattr(shape, 'name', '')
+                }
                 
-            shapes_info.append(shape_info)
-            st.write(f"図形を検出: {shape.name}")
-        
-        # クリーンアップ
-        wb.close()
+                if hasattr(shape, 'text'):
+                    shape_info['text'] = shape.text
+                    
+                shapes_info.append(shape_info)
+                st.write(f"図形を検出: {shape_info['name']}")
         
         # 検出結果のサマリー表示
         st.write("\n図形検出サマリー:")
@@ -108,14 +103,13 @@ def extract_shape_info(wb_path, sheet_name):
         
         for shape_type, count in type_counts.items():
             st.write(f"- {shape_type}: {count}個")
-            
+        
+        wb.close()
+        
     except Exception as e:
         st.error(f"図形検出中にエラーが発生: {str(e)}")
-        # エラー発生時のクリーンアップ
         try:
             if 'wb' in locals(): wb.close()
-            if xw.apps:
-                xw.apps.active.quit()
         except:
             pass
     
