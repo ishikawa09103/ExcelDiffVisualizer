@@ -141,34 +141,37 @@ def compare_shapes(shapes1, shapes2):
     return differences
 
 def calculate_sheet_similarity(df1, df2):
-    """
-    Calculate similarity between two dataframes
-    """
     try:
-        # Get common columns
+        # 共通の列を取得
         common_cols = list(set(df1.columns) & set(df2.columns))
         if not common_cols:
             return 0.0
             
-        # Calculate column similarity
+        # 列の一致度を計算
         column_similarity = len(common_cols) / max(len(df1.columns), len(df2.columns))
         
-        # Calculate data similarity
+        # データの一致度を計算
         matching_cells = 0
         total_cells = 0
         
+        # 共通の列のみを使用して新しいDataFrameを作成
+        df1_common = df1[common_cols].copy()
+        df2_common = df2[common_cols].copy()
+        
+        # データ型を文字列に変換
+        df1_common = df1_common.astype(str)
+        df2_common = df2_common.astype(str)
+        
         for col in common_cols:
-            df1_col = df1[col].astype(str)
-            df2_col = df2[col].astype(str)
-            
-            # Compare each cell
-            matches = (df1_col == df2_col).sum()
+            # 各列ごとに比較
+            matches = sum(df1_common[col].values == df2_common[col].values)
+            total = max(len(df1_common), len(df2_common))
             matching_cells += matches
-            total_cells += max(len(df1_col), len(df2_col))
+            total_cells += total
         
         data_similarity = matching_cells / total_cells if total_cells > 0 else 0
         
-        # Calculate overall similarity
+        # 総合的な類似度を計算（列の一致度と内容の一致度の平均）
         return (column_similarity + data_similarity) / 2
     except Exception as e:
         st.error(f"類似度計算中にエラー: {str(e)}")
