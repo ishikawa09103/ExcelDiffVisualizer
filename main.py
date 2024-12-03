@@ -229,13 +229,5 @@ def main():
     else:
         st.info("比較を開始するには、両方のExcelファイルをアップロードしてください")
 
-    # Add legend
-    st.sidebar.markdown("### 凡例")
-    st.sidebar.markdown("""
-    - 🟢 追加されたセル/図形 (緑色)
-    - 🔴 削除されたセル/図形 (赤色)
-    - 🟡 変更されたセル/図形 (黄色)
-    """)
-
 if __name__ == "__main__":
     main()
