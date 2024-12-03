@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 import numpy as np
+import xlwings as xw
 from openpyxl import load_workbook
 from openpyxl.drawing.spreadsheet_drawing import SpreadsheetDrawing, AnchorMarker
 from openpyxl.drawing.image import Image
@@ -66,16 +67,13 @@ def _process_drawing(drawing, shape_type='unknown'):
         return None
 
 def extract_shape_info(wb_path, sheet_name):
-    """
-    xlwingsを使用してワークシートから図形情報を抽出する関数
-    """
     st.write(f"図形情報の抽出を開始... シート名: {sheet_name}")
     shapes_info = []
     
     try:
-        # xlwingsでワークブックを開く
-        app = xw.App(visible=False)
-        wb = app.books.open(wb_path)
+        # xlwingsアプリケーションの初期化
+        xw.apps.add()
+        wb = xw.Book(wb_path)
         ws = wb.sheets[sheet_name]
         
         # 図形の検出
@@ -96,8 +94,9 @@ def extract_shape_info(wb_path, sheet_name):
             shapes_info.append(shape_info)
             st.write(f"図形を検出: {shape.name}")
         
+        # クリーンアップ
         wb.close()
-        app.quit()
+        xw.apps.active.quit()
         
         # 検出結果のサマリー表示
         st.write("\n図形検出サマリー:")
@@ -111,33 +110,20 @@ def extract_shape_info(wb_path, sheet_name):
         
         for shape_type, count in type_counts.items():
             st.write(f"- {shape_type}: {count}個")
-        
-        # 詳細情報の表示（デバッグ用）
-        st.write("\n検出された図形の詳細:")
-        for i, shape in enumerate(shapes_info, 1):
-            st.write(f"\n図形 {i}:")
-            st.write(f"- 種類: {shape['type']}")
-            st.write(f"- 位置: ({shape['x']}, {shape['y']})")
-            if shape.get('width') is not None and shape.get('height') is not None:
-                st.write(f"- サイズ: {shape['width']} x {shape['height']}")
-            if shape.get('text'):
-                st.write(f"- テキスト: {shape['text']}")
-            if shape.get('shape_type'):
-                st.write(f"- 図形タイプ: {shape['shape_type']}")
-                
+            
     except Exception as e:
         st.error(f"図形検出中にエラーが発生: {str(e)}")
-        st.write(f"エラーの種類: {type(e).__name__}")
-        import traceback
-        st.write("エラーの詳細:")
-        st.code(traceback.format_exc())
+        # エラー発生時のクリーンアップ
+        try:
+            if 'wb' in locals(): wb.close()
+            if xw.apps:
+                xw.apps.active.quit()
+        except:
+            pass
     
     return shapes_info
 
 def compare_shapes(shapes1, shapes2):
-    """
-    Compare shapes between two Excel files
-    """
     differences = []
     
     # Find added and modified shapes
@@ -235,13 +221,13 @@ def compare_dataframes(df1, df2):
                     return str(val)
             except (AttributeError, ValueError, TypeError):
                 return str(val)
-
+        
         def normalize_string(val):
             """文字列を正規化"""
             if pd.isna(val) or val is None:
                 return ''
-            return str(val).strip().lower()  # 大文字小文字を区別しない
-
+            return str(val).strip().lower()
+        
         # No.列以外のキー列を優先して処理
         no_columns = []
         other_key_columns = []

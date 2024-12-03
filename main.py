@@ -75,18 +75,31 @@ def main():
                         f.write(file2.getvalue())
                     
                     # Get workbook information using xlwings
-                    app = xw.App(visible=False)
-                    wb1 = app.books.open(file1_path)
-                    wb2 = app.books.open(file2_path)
-                    
-                    # Get sheet names
-                    sheets1 = [sheet.name for sheet in wb1.sheets]
-                    sheets2 = [sheet.name for sheet in wb2.sheets]
-                    
-                    # Close workbooks
-                    wb1.close()
-                    wb2.close()
-                    app.quit()
+                    try:
+                        # xlwingsアプリケーションの初期化
+                        xw.apps.add()
+                        wb1 = xw.Book(file1_path)
+                        wb2 = xw.Book(file2_path)
+                        
+                        # シート名の取得
+                        sheets1 = [sheet.name for sheet in wb1.sheets]
+                        sheets2 = [sheet.name for sheet in wb2.sheets]
+                        
+                        # クリーンアップ
+                        wb1.close()
+                        wb2.close()
+                        xw.apps.active.quit()
+                    except Exception as e:
+                        st.error(f"シート情報の取得中にエラーが発生しました: {str(e)}")
+                        # エラー発生時のクリーンアップ
+                        try:
+                            if 'wb1' in locals(): wb1.close()
+                            if 'wb2' in locals(): wb2.close()
+                            if xw.apps:
+                                xw.apps.active.quit()
+                        except:
+                            pass
+                        return
                     
                     if not sheets1 or not sheets2:
                         st.error("有効なシートが見つかりません。")
