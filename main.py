@@ -195,38 +195,72 @@ def main():
                         all_summary_data = []
                         
                         for result in all_comparison_results:
-                            sheet1_name = result['sheet1_name']
-                            sheet2_name = result['sheet2_name']
+                            sheet1_name = result.get('sheet1_name', f'Sheet1_{i+1}')
+                            sheet2_name = result.get('sheet2_name', f'Sheet2_{i+1}')
+                            sheet_pair = f"{sheet1_name} → {sheet2_name}"
                             
+                            # データの変更を処理
+                            data_changes = []
                             if 'diff_summary' in result:
                                 for diff in result['diff_summary'].to_dict('records'):
+                                    change_info = {
+                                        'シート名': sheet_pair,
+                                        '変更タイプ': 'データ変更'
+                                    }
+                                    
                                     if diff['type'] == 'modified':
-                                        df1 = result['df1']
-                                        col_idx = df1.columns.get_loc(diff['column'])
-                                        cell_ref_old = utils.get_excel_cell_reference(col_idx, diff['row_index_old'])
-                                        cell_ref_new = utils.get_excel_cell_reference(col_idx, diff['row_index_new'])
-                                        
-                                        all_summary_data.append({
-                                            'シート名': f"{sheet1_name} → {sheet2_name}",
-                                            '変更タイプ': 'データ変更',
-                                            'セル位置 (変更前)': cell_ref_old,
-                                            'セル位置 (変更後)': cell_ref_new,
+                                        change_info.update({
+                                            'セル位置 (変更前)': get_excel_cell_reference(result['df1'].columns.get_loc(diff['column']), diff['row_index_old']),
+                                            'セル位置 (変更後)': get_excel_cell_reference(result['df1'].columns.get_loc(diff['column']), diff['row_index_new']),
                                             '変更前の値': diff['value_old'],
                                             '変更後の値': diff['value_new']
                                         })
                                     else:
-                                        df = result['df1']
-                                        row_idx = diff['row_index']
-                                        range_ref = utils.get_excel_range_reference(row_idx, 0, len(df.columns) - 1)
-                                        
-                                        current_sheet = sheet2_name if diff['type'] == 'added' else sheet1_name
-                                        all_summary_data.append({
-                                            'シート名': current_sheet,
-                                            '変更タイプ': 'データ追加' if diff['type'] == 'added' else 'データ削除',
-                                            'セル位置': f"{row_idx + 1}行目 ({range_ref})",
-                                            '値': ' | '.join([f"{k}: {v}" for k, v in diff['values'].items() if pd.notna(v)])
+                                        df = result['df1'] if diff['type'] == 'deleted' else result['df2']
+                                        range_ref = get_excel_range_reference(diff['row_index'], 0, len(df.columns) - 1)
+                                        change_info.update({
+                                            '変更タイプ': '行追加' if diff['type'] == 'added' else '行削除',
+                                            'セル位置': f"{diff['row_index'] + 1}行目 ({range_ref})",
+                                            '値': ' | '.join([f"{k}: {v}" for k, v in (diff['values'].items() if isinstance(diff['values'], dict) else {}).items() if pd.notna(v)])
                                         })
+                                    
+                                    data_changes.append(change_info)
+                            
+                            # 図形の変更を処理
+                            shape_changes = []
+                            if 'shape_differences' in result:
+                                for shape_diff in result['shape_differences']:
+                                    shape_info = {
+                                        'シート名': sheet_pair,
+                                        '変更タイプ': f'図形{shape_diff["type"]}'
+                                    }
+                                    
+                                    if shape_diff['type'] == 'modified':
+                                        old_shape = shape_diff['old_shape']
+                                        new_shape = shape_diff['new_shape']
+                                        shape_info.update({
+                                            'セル位置 (変更前)': get_excel_cell_reference(old_shape['x'], old_shape['y']),
+                                            'セル位置 (変更後)': get_excel_cell_reference(new_shape['x'], new_shape['y']),
+                                            '変更前の値': f"Type: {old_shape['type']}, Text: {old_shape.get('text', '')}",
+                                            '変更後の値': f"Type: {new_shape['type']}, Text: {new_shape.get('text', '')}"
+                                        })
+                                    else:
+                                        shape = shape_diff.get('shape', {})
+                                        shape_info.update({
+                                            'セル位置': get_excel_cell_reference(shape['x'], shape['y']),
+                                            '値': f"Type: {shape['type']}, Text: {shape.get('text', '')}"
+                                        })
+                                    
+                                    shape_changes.append(shape_info)
+                            
+                            # シートごとの変更をまとめて追加
+                            all_summary_data.extend(data_changes + shape_changes)
+                            
+                            # 元のデータを保存
+                            result['df1'].to_excel(writer, sheet_name=f'F1_{sheet1_name[:26]}', index=False)
+                            result['df2'].to_excel(writer, sheet_name=f'F2_{sheet2_name[:26]}', index=False)
                         
+                        # サマリーシートの作成
                         if all_summary_data:
                             summary_df = pd.DataFrame(all_summary_data)
                             st.dataframe(summary_df)
