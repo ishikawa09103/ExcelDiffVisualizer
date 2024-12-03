@@ -198,10 +198,11 @@ def export_comparison(comparison_result, sheet1_name=None, sheet2_name=None):
     
     # Create Excel writer object
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # Write data differences with book names
-        comparison_result['df1'].to_excel(writer, sheet_name='File1_Data', index=False)
-        comparison_result['df2'].to_excel(writer, sheet_name='File2_Data', index=False)
-        
+        # Write data differences with sheet names
+        sheet1_label = f'File1_{sheet1_name}' if sheet1_name else 'File1'
+        sheet2_label = f'File2_{sheet2_name}' if sheet2_name else 'File2'
+        comparison_result['df1'].to_excel(writer, sheet_name=sheet1_label, index=False)
+        comparison_result['df2'].to_excel(writer, sheet_name=sheet2_label, index=False)
         # Create a more detailed summary DataFrame with Excel-style cell references
         summary_data = []
         for diff in comparison_result['diff_summary'].to_dict('records'):
@@ -210,12 +211,12 @@ def export_comparison(comparison_result, sheet1_name=None, sheet2_name=None):
                 cell_ref_old = get_excel_cell_reference(col_idx, diff['row_index_old'])
                 cell_ref_new = get_excel_cell_reference(col_idx, diff['row_index_new'])
                 summary_data.append({
-                    'ブック': 'File1 → File2',
                     '変更タイプ': '変更',
                     'セル位置 (変更前)': cell_ref_old,
                     'セル位置 (変更後)': cell_ref_new,
                     '変更前の値': diff['value_old'],
-                    '変更後の値': diff['value_new']
+                    '変更後の値': diff['value_new'],
+                    '類似度': f"{diff.get('similarity', 1.0):.2%}"
                 })
             else:
                 row_idx = diff['row_index']
@@ -227,20 +228,19 @@ def export_comparison(comparison_result, sheet1_name=None, sheet2_name=None):
                     if pd.notna(val):
                         row_values.append(f"{col}: {val}")
                 
-                current_book = 'File2' if diff['type'] == 'added' else 'File1'
                 summary_data.append({
-                    'ブック': current_book,
                     '変更タイプ': '行追加' if diff['type'] == 'added' else '削除',
                     'セル位置': f"{row_idx + 1}行目 ({range_ref})",
-                    '値': ' | '.join(row_values)
+                    '値': ' | '.join(row_values),
+                    '類似度': 'N/A'
                 })
         
         summary_df = pd.DataFrame(summary_data)
         if not summary_df.empty:
-            # ブック名でソート可能にするために列の順序を調整
-            columns_order = ['ブック', '変更タイプ', 'セル位置', 'セル位置 (変更前)', 'セル位置 (変更後)', '値', '変更前の値', '変更後の値']
+            # シート名でソート可能にするために列の順序を調整
+            columns_order = ['シート名', '変更タイプ', 'セル位置', 'セル位置 (変更前)', 'セル位置 (変更後)', '値', '変更前の値', '変更後の値']
             existing_columns = [col for col in columns_order if col in summary_df.columns]
-            other_columns = [col for col in summary_df.columns if col not in columns_order and col != '類似度']
+            other_columns = [col for col in summary_df.columns if col not in columns_order]
             summary_df = summary_df[existing_columns + other_columns]
             summary_df.to_excel(writer, sheet_name='Data_Summary', index=False)
         
