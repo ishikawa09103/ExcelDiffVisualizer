@@ -100,18 +100,24 @@ def main():
                     st.write(f"ファイル2のシート数: {len(sheets2)}")
                     st.write(f"ファイル2のシート名: {', '.join(sheets2)}")
                     
-                    # Sheet selection
+                    # シート選択の前にシートの追加/削除を確認
+                    added_sheets = set(sheets2) - set(sheets1)
+                    deleted_sheets = set(sheets1) - set(sheets2)
+
+                    if added_sheets:
+                        st.info(f"追加されたシート: {', '.join(added_sheets)}")
+                    if deleted_sheets:
+                        st.info(f"削除されたシート: {', '.join(deleted_sheets)}")
+
+                    # シート選択のロジックを変更（シート数チェックを削除）
                     st.subheader("シートの選択")
-                    selected_sheets1 = st.multiselect("ファイル1のシートを選択", sheets1, default=[sheets1[0]])
-                    selected_sheets2 = st.multiselect("ファイル2のシートを選択", sheets2, default=[sheets2[0]])
-                    
-                    if len(selected_sheets1) != len(selected_sheets2):
-                        st.error("選択されたシートの数が一致しません。")
-                        return
-                    
-                    if not selected_sheets1 or not selected_sheets2:
-                        st.warning("比較するシートを選択してください。")
-                        return
+                    common_sheets = list(set(sheets1) & set(sheets2))
+                    if common_sheets:
+                        st.write("共通するシートの比較:")
+                        selected_sheets1 = st.multiselect("ファイル1のシートを選択", common_sheets)
+                        selected_sheets2 = [s for s in selected_sheets1]  # 同じシートを選択
+                    else:
+                        st.warning("共通するシートがありません")
 
                     # 全シートの比較結果を格納する配列
                     all_comparison_results = []
@@ -230,7 +236,7 @@ def main():
                         # Export options for all sheets
                         st.markdown("---")
                         st.subheader("エクスポート")
-                        utils.export_comparison(all_comparison_results)
+                        utils.export_comparison(all_comparison_results, sheets1, sheets2)
                     
                 except Exception as e:
                     st.error(f"比較処理中にエラーが発生しました: {str(e)}")

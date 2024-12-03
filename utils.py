@@ -178,16 +178,37 @@ def display_shape_differences(shape_differences):
                 except Exception as e:
                     st.error(f"変更後の情報表示中にエラー: {str(e)}")
 
-def export_comparison(comparison_results):
+def export_comparison(comparison_results, sheets1, sheets2):
     """
     Export comparison results for all sheets in a single Excel file
     comparison_results: List of comparison result dictionaries, each containing df1, df2, diff_summary, etc.
+    sheets1, sheets2: Lists of sheet names from both files for tracking added/deleted sheets
     """
     output = io.BytesIO()
     
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         # サマリーデータの作成
         all_summary_data = []
+        
+        # シートの追加/削除情報を追加
+        added_sheets = set(sheets2) - set(sheets1)
+        deleted_sheets = set(sheets1) - set(sheets2)
+        
+        if added_sheets or deleted_sheets:
+            sheet_changes = []
+            for sheet in added_sheets:
+                sheet_changes.append({
+                    'シート名': sheet,
+                    '変更タイプ': 'シート追加',
+                    '値': f"新しいシート '{sheet}' が追加されました"
+                })
+            for sheet in deleted_sheets:
+                sheet_changes.append({
+                    'シート名': sheet,
+                    '変更タイプ': 'シート削除',
+                    '値': f"シート '{sheet}' が削除されました"
+                })
+            all_summary_data.extend(sheet_changes)
         
         # 各シートペアの比較結果をまとめて処理
         for i, result in enumerate(comparison_results):
