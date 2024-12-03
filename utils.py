@@ -186,76 +186,49 @@ def export_comparison(comparison_results):
     output = io.BytesIO()
     
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # 各シートのデータ出力
+        # サマリーデータの作成
+        all_summary_data = []
+        
+        # 各シートペアの比較結果をまとめて処理
         for i, result in enumerate(comparison_results):
             sheet1_name = result.get('sheet1_name', f'Sheet1_{i+1}')
             sheet2_name = result.get('sheet2_name', f'Sheet2_{i+1}')
-            
-            # シート名を適切な形式に変換
-            sheet1_label = f'File1_{sheet1_name}'
-            sheet2_label = f'File2_{sheet2_name}'
-            
-            # シート名の長さ制限（31文字）
-            max_length = 31
-            if len(sheet1_label) > max_length:
-                sheet1_label = f'F1_{sheet1_name[:max_length-4]}'
-            if len(sheet2_label) > max_length:
-                sheet2_label = f'F2_{sheet2_name[:max_length-4]}'
-            
-            # データフレームを出力
-            result['df1'].to_excel(writer, sheet_name=sheet1_label, index=False)
-            result['df2'].to_excel(writer, sheet_name=sheet2_label, index=False)
-        
-        # 全シートのサマリーを作成
-        all_summary_data = []
-        for result in comparison_results:
-            sheet1_name = result.get('sheet1_name', '')
-            sheet2_name = result.get('sheet2_name', '')
             sheet_pair = f"{sheet1_name} → {sheet2_name}"
             
             # データの変更を処理
-            for diff in result['diff_summary'].to_dict('records'):
-                if diff['type'] == 'modified':
-                    col_idx = result['df1'].columns.get_loc(diff['column'])
-                    cell_ref_old = get_excel_cell_reference(col_idx, diff['row_index_old'])
-                    cell_ref_new = get_excel_cell_reference(col_idx, diff['row_index_new'])
-                    
-                    all_summary_data.append({
+            data_changes = []
+            if 'diff_summary' in result:
+                for diff in result['diff_summary'].to_dict('records'):
+                    change_info = {
                         'シート名': sheet_pair,
-                        '変更タイプ': 'データ変更',
-                        'セル位置 (変更前)': cell_ref_old,
-                        'セル位置 (変更後)': cell_ref_new,
-                        '変更前の値': diff['value_old'],
-                        '変更後の値': diff['value_new'],
-                        '類似度': f"{diff.get('similarity', 1.0):.2%}"
-                    })
-                else:
-                    df = result['df1'] if diff['type'] == 'deleted' else result['df2']
-                    row_idx = diff['row_index']
-                    range_ref = get_excel_range_reference(row_idx, 0, len(df.columns) - 1)
+                        '変更タイプ': 'データ変更'
+                    }
                     
-                    row_values = []
-                    for col in df.columns:
-                        val = diff['values'].get(col, '')
-                        if pd.notna(val):
-                            row_values.append(f"{col}: {val}")
+                    if diff['type'] == 'modified':
+                        change_info.update({
+                            'セル位置 (変更前)': get_excel_cell_reference(result['df1'].columns.get_loc(diff['column']), diff['row_index_old']),
+                            'セル位置 (変更後)': get_excel_cell_reference(result['df1'].columns.get_loc(diff['column']), diff['row_index_new']),
+                            '変更前の値': diff['value_old'],
+                            '変更後の値': diff['value_new']
+                        })
+                    else:
+                        df = result['df1'] if diff['type'] == 'deleted' else result['df2']
+                        range_ref = get_excel_range_reference(diff['row_index'], 0, len(df.columns) - 1)
+                        change_info.update({
+                            '変更タイプ': '行追加' if diff['type'] == 'added' else '行削除',
+                            'セル位置': f"{diff['row_index'] + 1}行目 ({range_ref})",
+                            '値': ' | '.join([f"{k}: {v}" for k, v in diff['values'].items() if pd.notna(v)])
+                        })
                     
-                    all_summary_data.append({
-                        'シート名': sheet_pair,
-                        '変更タイプ': '行追加' if diff['type'] == 'added' else '行削除',
-                        'セル位置': f"{row_idx + 1}行目 ({range_ref})",
-                        '値': ' | '.join(row_values),
-                        '類似度': 'N/A'
-                    })
+                    data_changes.append(change_info)
             
             # 図形の変更を処理
+            shape_changes = []
             if 'shape_differences' in result:
                 for shape_diff in result['shape_differences']:
                     shape_info = {
                         'シート名': sheet_pair,
-                        '変更タイプ': f'図形{shape_diff["type"]}',
-                        'セル位置': '',
-                        '値': ''
+                        '変更タイプ': f'図形{shape_diff["type"]}'
                     }
                     
                     if shape_diff['type'] == 'modified':
@@ -274,17 +247,23 @@ def export_comparison(comparison_results):
                             '値': f"Type: {shape['type']}, Text: {shape.get('text', '')}"
                         })
                     
-                    all_summary_data.append(shape_info)
+                    shape_changes.append(shape_info)
+            
+            # シートごとの変更をまとめて追加
+            all_summary_data.extend(data_changes + shape_changes)
+            
+            # 元のデータを保存
+            result['df1'].to_excel(writer, sheet_name=f'F1_{sheet1_name[:26]}', index=False)
+            result['df2'].to_excel(writer, sheet_name=f'F2_{sheet2_name[:26]}', index=False)
         
-        # サマリーデータフレームを作成して出力
+        # サマリーシートの作成
         if all_summary_data:
             summary_df = pd.DataFrame(all_summary_data)
             # 列の順序を整理
             columns_order = ['シート名', '変更タイプ', 'セル位置', 'セル位置 (変更前)', 
-                           'セル位置 (変更後)', '値', '変更前の値', '変更後の値', '類似度']
+                           'セル位置 (変更後)', '値', '変更前の値', '変更後の値']
             existing_columns = [col for col in columns_order if col in summary_df.columns]
-            other_columns = [col for col in summary_df.columns if col not in columns_order]
-            summary_df = summary_df[existing_columns + other_columns]
+            summary_df = summary_df[existing_columns]
             
             summary_df.to_excel(writer, sheet_name='Summary', index=False)
     
