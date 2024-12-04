@@ -286,20 +286,21 @@ def export_comparison(comparison_results, sheets1, sheets2):
                                 st.write("デバッグ情報:")
                                 st.write(f"入力値の型: {type(values)}")
                                 st.write(f"入力値の内容: {values}")
-                                
+
                                 if isinstance(values, dict):
-                                    result = ' | '.join([f"{k}: {v}" for k, v in values.items() if pd.notna(v)])
+                                    result = ' | '.join([f"{k}: {v}" for k, v in values.items() if pd.notna(v)])  # 修正点
                                     st.write(f"処理結果: {result}")
                                     return result
                                 elif hasattr(values, 'items'):
-                                    result = ' | '.join([f"{k}: {v}" for k, v in values if pd.notna(v)])
+                                    # ここは辞書ではなく、dict_itemsオブジェクトであることを考慮
+                                    result = ' | '.join([f"{k}: {v}" for k, v in values if pd.notna(v)])  # 修正点
                                     st.write(f"処理結果: {result}")
                                     return result
-                                
+
                                 result = str(values)
                                 st.write(f"処理結果: {result}")
                                 return result
-                                
+
                             except Exception as e:
                                 st.error(f"値のフォーマット中にエラー: {str(e)}")
                                 st.write("デバッグ情報:")
