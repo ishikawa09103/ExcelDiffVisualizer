@@ -283,7 +283,7 @@ def export_comparison(comparison_results, sheets1, sheets2):
                         change_info.update({
                             '変更タイプ': '行追加' if diff['type'] == 'added' else '行削除',
                             'セル位置': f"{diff['row_index'] + 1}行目 ({range_ref})",
-                            '値': ' | '.join([f"{k}: {v}" for k, v in (diff['values'] if isinstance(diff['values'], dict) else {}).items()])
+                            '値': ' | '.join([f"{k}: {v}" for k, v in diff['values'].items()]) if isinstance(diff['values'], dict) else str(diff['values'])
                         })
                     
                     data_changes.append(change_info)
