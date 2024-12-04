@@ -86,32 +86,22 @@ def create_grid(df, cell_styles=None):
                 grid_options['context'] = {'cell_styles': cell_styles}
             
             # データ更新とグリッド初期化の非同期処理
-            grid_options['onGridReady'] = JsCode("""
+            grid_options['onGridReady'] = JsCode('''
             function(params) {
                 try {
-                    if (!params.api) {
-                        console.error('Grid API が利用できません');
-                        return;
-                    }
-                    
-                    // 非同期でのグリッドサイズ調整
+                    if (!params.api) return;
                     setTimeout(() => {
                         try {
                             params.api.sizeColumnsToFit();
                         } catch (e) {
-                            console.error('グリッドサイズ調整エラー:', e);
+                            console.warn('Grid size adjustment error:', e);
                         }
-                    }, 0);
-                    
-                    // データ更新エラーハンドリング
-                    params.api.addEventListener('exception', function(error) {
-                        console.error('データ更新エラー:', error);
-                    });
+                    }, 100);
                 } catch (e) {
-                    console.error('グリッド初期化エラー:', e);
+                    console.warn('Grid initialization error:', e);
                 }
             }
-            """)
+            ''')
             
             # データ更新イベントハンドリング
             grid_options['onCellValueChanged'] = JsCode("""
