@@ -288,13 +288,13 @@ def export_comparison(comparison_results, sheets1, sheets2):
                                 st.write(f"入力値の内容: {values}")
 
                                 if isinstance(values, dict):
-                                    # ここは通常の辞書の場合
+                                    # values が辞書の場合
                                     result = ' | '.join([f"{k}: {v}" for k, v in values.items() if pd.notna(v)])
                                     st.write(f"処理結果: {result}")
                                     return result
-                                elif hasattr(values, '__iter__') and not isinstance(values, str):  # 反復可能なオブジェクトかつ文字列でないことを確認
-                                    # ここはdict_itemsオブジェクトや他の反復可能オブジェクトの場合
-                                    result = ' | '.join([f"{k}: {v}" for k, v in values if pd.notna(v)])
+                                elif isinstance(values, (list, set, tuple)) or hasattr(values, '__iter__'):
+                                    # dict_items オブジェクトとそのほかの反復可能なオブジェクトの場合
+                                    result = ' | '.join([f"{k}: {v}" for k, v in values if pd.notna(v)])  # dict_itemsの場合、直接反復処理
                                     st.write(f"処理結果: {result}")
                                     return result
 
