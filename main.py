@@ -110,31 +110,49 @@ def main():
                     if deleted_sheets:
                         st.info(f"削除されたシート: {', '.join(deleted_sheets)}")
 
-                    # シート選択のロジックを変更（シート数チェックを削除）
+                    # シート選択とプログレス表示の改善
                     st.subheader("シートの選択")
                     common_sheets = list(set(sheets1) & set(sheets2))
                     if common_sheets:
                         st.write("共通するシートの比較:")
-                        selected_sheets1 = st.multiselect("ファイル1のシートを選択", common_sheets)
+                        selected_sheets1 = st.multiselect(
+                            "比較するシートを選択してください（複数選択可）",
+                            common_sheets,
+                            help="比較したいシートを選択してください。シートの内容が同一でも、シート名が異なる場合は表示されません。"
+                        )
                         selected_sheets2 = [s for s in selected_sheets1]  # 同じシートを選択
+                        
+                        if selected_sheets1:
+                            st.info(f"選択されたシート: {', '.join(selected_sheets1)}")
+                            total_sheets = len(selected_sheets1)
+                            st.progress(0.0, text="シートの比較を開始します...")
+                        else:
+                            st.warning("シートが選択されていません。比較を開始するには少なくとも1つのシートを選択してください。")
                     else:
-                        st.warning("共通するシートがありません")
+                        st.error("共通するシートがありません。ファイル間で同じ名前のシートが存在しない場合は比較できません。")
 
                     # 全シートの比較結果を格納する配列
                     all_comparison_results = []
                     
-                    # 各シートペアを比較
-                    for sheet1, sheet2 in zip(selected_sheets1, selected_sheets2):
+                    # 各シートペアを比較（プログレスバー付き）
+                    for i, (sheet1, sheet2) in enumerate(zip(selected_sheets1, selected_sheets2)):
+                        progress = (i + 1) / len(selected_sheets1)
+                        st.progress(progress, text=f"シート {i+1}/{len(selected_sheets1)} を比較中: {sheet1}")
                         st.subheader(f"シートの比較: {sheet1} vs {sheet2}")
                         
                         try:
-                            # Reset file pointers for reading Excel
-                            file1.seek(0)
-                            file2.seek(0)
-                            
-                            # Load sheet data
-                            df1 = pd.read_excel(file1, sheet_name=sheet1)
-                            df2 = pd.read_excel(file2, sheet_name=sheet2)
+                            with st.spinner(f"シート '{sheet1}' のデータを読み込み中..."):
+                                # Reset file pointers for reading Excel
+                                file1.seek(0)
+                                file2.seek(0)
+                                
+                                # Load sheet data with error handling
+                                try:
+                                    df1 = pd.read_excel(file1, sheet_name=sheet1)
+                                    df2 = pd.read_excel(file2, sheet_name=sheet2)
+                                except Exception as e:
+                                    st.error(f"シートの読み込み中にエラーが発生しました: {str(e)}")
+                                    continue
                             
                             if df1.empty or df2.empty:
                                 st.warning(f"シート '{sheet1}' または '{sheet2}' にデータが存在しません。")
