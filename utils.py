@@ -3,6 +3,8 @@ from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 import pandas as pd
 import io
 from datetime import datetime
+import inspect
+import traceback
 
 def get_excel_cell_reference(column_index, row_index):
     """
@@ -287,6 +289,11 @@ def export_comparison(comparison_results, sheets1, sheets2):
                                 return str(values)
                             except Exception as e:
                                 st.error(f"値のフォーマット中にエラー: {str(e)}")
+                                st.write("デバッグ情報:")
+                                st.code(inspect.getsource(format_values), language="python")
+                                st.write(f"エラー発生箇所:\n{traceback.format_exc()}")
+                                st.write(f"値の型: {type(values)}")
+                                st.write(f"値の内容: {values}")
                                 return str(values)
 
                         try:
