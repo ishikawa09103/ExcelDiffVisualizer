@@ -284,14 +284,17 @@ def export_comparison(comparison_results, sheets1, sheets2):
                             try:
                                 if isinstance(values, dict):
                                     return ' | '.join([f"{k}: {v}" for k, v in values.items() if pd.notna(v)])
-                                elif hasattr(values, 'items'):  # dict_itemsオブジェクトの場合
+                                elif hasattr(values, 'items'):
                                     return ' | '.join([f"{k}: {v}" for k, v in values if pd.notna(v)])
                                 return str(values)
                             except Exception as e:
                                 st.error(f"値のフォーマット中にエラー: {str(e)}")
                                 st.write("デバッグ情報:")
+                                # 関数のソースコードを表示
                                 st.code(inspect.getsource(format_values), language="python")
+                                # スタックトレースを表示
                                 st.write(f"エラー発生箇所:\n{traceback.format_exc()}")
+                                # データ型と内容を表示
                                 st.write(f"値の型: {type(values)}")
                                 st.write(f"値の内容: {values}")
                                 return str(values)
