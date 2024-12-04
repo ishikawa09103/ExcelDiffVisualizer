@@ -279,9 +279,15 @@ def export_comparison(comparison_results, sheets1, sheets2):
                         })
                     else:
                         def format_values(values):
-                            if isinstance(values, dict):
-                                return ' | '.join([f"{k}: {v}" for k, v in values.items() if pd.notna(v)])
-                            return str(values)
+                            try:
+                                if isinstance(values, dict):
+                                    return ' | '.join([f"{k}: {v}" for k, v in values.items() if pd.notna(v)])
+                                elif hasattr(values, 'items'):  # dict_itemsオブジェクトの場合
+                                    return ' | '.join([f"{k}: {v}" for k, v in values if pd.notna(v)])
+                                return str(values)
+                            except Exception as e:
+                                st.error(f"値のフォーマット中にエラー: {str(e)}")
+                                return str(values)
 
                         try:
                             df = result['df1'] if diff['type'] == 'deleted' else result['df2']
