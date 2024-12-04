@@ -278,28 +278,16 @@ def export_comparison(comparison_results, sheets1, sheets2):
                             '変更後の値': diff['value_new']
                         })
                     else:
-                        # デバッグ情報の出力を追加
-                        st.write("Debug: データ型の確認")
-                        st.write(f"diff['values']のデータ型: {type(diff['values'])}")
-                        st.write(f"diff['values']の内容: {diff['values']}")
-
-                        def convert_to_dict(values):
+                        def format_values(values):
                             if isinstance(values, dict):
-                                return values
-                            if hasattr(values, 'to_dict'):
-                                return values.to_dict()
-                            return {'value': str(values)}
+                                return ' | '.join([f"{k}: {v}" for k, v in values.items() if pd.notna(v)])
+                            return str(values)
 
                         try:
                             df = result['df1'] if diff['type'] == 'deleted' else result['df2']
                             range_ref = get_excel_range_reference(diff['row_index'], 0, len(df.columns) - 1)
                             
-                            # デバッグ情報
-                            st.write(f"Debug - diff['values']の型: {type(diff['values'])}")
-                            st.write(f"Debug - diff['values']の内容: {diff['values']}")
-                            
-                            values_dict = convert_to_dict(diff['values'])
-                            formatted_values = ' | '.join([f"{k}: {v}" for k, v in values_dict.items()])
+                            formatted_values = format_values(diff['values'])
                             
                             change_info.update({
                                 '変更タイプ': '行追加' if diff['type'] == 'added' else '行削除',
