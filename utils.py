@@ -282,41 +282,31 @@ def export_comparison(comparison_results, sheets1, sheets2):
                     else:
                         def format_values(values):
                             try:
+                                # デバッグ情報を先に出力
+                                st.write("デバッグ情報:")
+                                st.write(f"入力値の型: {type(values)}")
+                                st.write(f"入力値の内容: {values}")
+                                
                                 if isinstance(values, dict):
-                                    return ' | '.join([f"{k}: {v}" for k, v in values.items() if pd.notna(v)])
+                                    result = ' | '.join([f"{k}: {v}" for k, v in values.items() if pd.notna(v)])
+                                    st.write(f"処理結果: {result}")
+                                    return result
                                 elif hasattr(values, 'items'):
-                                    return ' | '.join([f"{k}: {v}" for k, v in values if pd.notna(v)])
-                                return str(values)
+                                    result = ' | '.join([f"{k}: {v}" for k, v in values if pd.notna(v)])
+                                    st.write(f"処理結果: {result}")
+                                    return result
+                                
+                                result = str(values)
+                                st.write(f"処理結果: {result}")
+                                return result
+                                
                             except Exception as e:
-                                try:
-                                    error_message = f"値のフォーマット中にエラー: {str(e)}"
-                                    st.error(error_message)
-                                    
-                                    # デバッグ情報の表示
-                                    with st.expander("デバッグ情報"):
-                                        st.markdown("### エラー詳細")
-                                        st.error(error_message)
-                                        
-                                        st.markdown("### 関数のソースコード")
-                                        try:
-                                            st.code(inspect.getsource(format_values), language="python")
-                                        except Exception as source_error:
-                                            st.error(f"ソースコード取得エラー: {str(source_error)}")
-                                        
-                                        st.markdown("### スタックトレース")
-                                        try:
-                                            st.code(traceback.format_exc(), language="python")
-                                        except Exception as trace_error:
-                                            st.error(f"スタックトレース取得エラー: {str(trace_error)}")
-                                        
-                                        st.markdown("### 問題のデータ")
-                                        st.write(f"値の型: {type(values)}")
-                                        st.write(f"値の内容: {values}")
-                                    
-                                    return str(values)
-                                except Exception as debug_error:
-                                    st.error(f"デバッグ情報の出力中にエラー: {str(debug_error)}")
-                                    return str(values)
+                                st.error(f"値のフォーマット中にエラー: {str(e)}")
+                                st.write("デバッグ情報:")
+                                st.write(f"エラー発生時の値の型: {type(values)}")
+                                st.write(f"エラー発生時の値の内容: {values}")
+                                st.write(f"エラーのトレース情報: {traceback.format_exc()}")
+                                return str(values)
 
                         try:
                             df = result['df1'] if diff['type'] == 'deleted' else result['df2']
